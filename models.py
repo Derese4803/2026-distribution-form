@@ -1,6 +1,5 @@
 from sqlalchemy import Column, Integer, String, ForeignKey
 from sqlalchemy.orm import relationship
-# Import the Base from your database configuration file
 from database import Base, engine
 
 class Woreda(Base):
@@ -8,7 +7,7 @@ class Woreda(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True)
     
-    # Relationship to Kebeles
+    # Relationship to link Kebeles to this Woreda
     kebeles = relationship("Kebele", back_populates="parent_woreda", cascade="all, delete-orphan")
 
 class Kebele(Base):
@@ -17,21 +16,23 @@ class Kebele(Base):
     name = Column(String)
     woreda_id = Column(Integer, ForeignKey("woredas.id"))
     
-    # Relationship back to Woreda
+    # Relationship back to the Woreda
     parent_woreda = relationship("Woreda", back_populates="kebeles")
 
 class Farmer(Base):
     __tablename__ = "farmers"
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String)
-    f_type = Column(String)
+    phone = Column(String)
     woreda = Column(String)
     kebele = Column(String)
-    phone = Column(String)
-    audio_url = Column(String)
-    registered_by = Column(String)
     
-    # --- Tree Seedling Varieties ---
+    # This name must match exactly with what is in app.py
+    officer_name = Column(String) 
+    
+    audio_url = Column(String)
+    
+    # --- 2026 Seedling Varieties ---
     gesho = Column(Integer, default=0)
     giravila = Column(Integer, default=0)
     diceres = Column(Integer, default=0)
@@ -42,6 +43,6 @@ class Farmer(Base):
     arzelibanos = Column(Integer, default=0)
     guava = Column(Integer, default=0)
 
-# Function to create the tables in the database
+# Helper to initialize the database file
 def create_tables():
     Base.metadata.create_all(bind=engine)
