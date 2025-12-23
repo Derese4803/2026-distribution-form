@@ -10,17 +10,17 @@ import os
 from database import SessionLocal
 from models import Farmer, Woreda, Kebele, create_tables
 
-# --- INITIALIZATION ---
-# Updated page title for 2026 Distribution
+# --- CONFIG ---
 st.set_page_config(page_title="Amhara 2026 Distribution", layout="wide", page_icon="🌳")
 create_tables()
 
+# Database migration to ensure all columns exist
 def run_migrations():
     db = SessionLocal()
-    cols = ["gesho", "giravila", "diceres", "wanza", "papaya", "moringa", "lemon", "arzelibanos", "guava", "phone", "registered_by", "audio_url"]
+    cols = ["gesho", "giravila", "diceres", "wanza", "papaya", "moringa", "lemon", "arzelibanos", "guava", "phone", "officer_name", "audio_url"]
     for c in cols:
         try:
-            dtype = "INTEGER DEFAULT 0" if c not in ["phone", "registered_by", "audio_url"] else "TEXT"
+            dtype = "INTEGER DEFAULT 0" if c not in ["phone", "officer_name", "audio_url"] else "TEXT"
             db.execute(text(f"ALTER TABLE farmers ADD COLUMN {c} {dtype}"))
             db.commit()
         except:
@@ -42,7 +42,7 @@ def upload_to_drive(file, farmer_name):
         service.permissions().create(fileId=fid, body={'type': 'anyone', 'role': 'viewer'}).execute()
         return f"https://drive.google.com/uc?id={fid}"
     except Exception as e:
-        st.error(f"Drive Error: {e}")
+        st.error(f"Cloud Error: {e}")
         return None
 
 # --- NAVIGATION ---
@@ -51,9 +51,8 @@ def nav(p):
     st.session_state["page"] = p
     st.rerun()
 
-# --- APP PAGES ---
+# --- MAIN UI ---
 def main():
-    # Sidebar Branding
     st.sidebar.title("🌳 Amhara 2026")
     st.sidebar.caption("Distribution Register Form")
     
@@ -61,16 +60,15 @@ def main():
 
     if p == "Home":
         st.title("🚜 Amhara 2026 Distribution Register Form")
-        st.info("Welcome to the 2026 Planting Season distribution tool.")
         st.markdown("---")
         c1, c2, c3 = st.columns(3)
         if c1.button("📝 NEW REGISTRATION", use_container_width=True, type="primary"): nav("Reg")
         if c2.button("📍 MANAGE LOCATIONS", use_container_width=True): nav("Loc")
-        if c3.button("📊 VIEW SURVEY DATA", use_container_width=True): nav("Data")
+        if c3.button("📊 VIEW DATA", use_container_width=True): nav("Data")
 
     elif p == "Reg":
-        if st.button("⬅️ Back to Home"): nav("Home")
-        st.header("📝 Farmer Distribution Entry")
+        if st.button("⬅️ Home"): nav("Home")
+        st.header("📝 New Distribution Record")
         db = SessionLocal()
         woredas = db.query(Woreda).all()
         
@@ -79,7 +77,7 @@ def main():
             with col_a:
                 name = st.text_input("Farmer Full Name")
                 phone = st.text_input("Phone Number")
-                surveyor = st.text_input("Distribution Officer Name")
+                officer = st.text_input("Distribution Officer Name (TNO)")
             with col_b:
                 w_list = [w.name for w in woredas] if woredas else ["Add Woredas First"]
                 sel_woreda = st.selectbox("Woreda", w_list)
@@ -90,8 +88,7 @@ def main():
                 sel_kebele = st.selectbox("Kebele", kebeles if kebeles else ["No Kebeles Found"])
 
             st.markdown("---")
-            st.subheader("🌲 Seedlings Distributed")
-            # 3-Column Input Layout
+            st.subheader("🌲 Seedling Distribution Table")
             t1, t2, t3 = st.columns(3)
             with t1:
                 gesho = st.number_input("Gesho", 0)
@@ -106,57 +103,51 @@ def main():
                 moringa = st.number_input("Moringa", 0)
                 guava = st.number_input("Guava", 0)
 
-            audio = st.file_uploader("🎤 Audio Note (Confirmation)", type=['mp3', 'wav', 'm4a'])
+            audio = st.file_uploader("🎤 Audio Record (Confirmation)", type=['mp3', 'wav', 'm4a'])
             
-            if st.form_submit_button("Submit Distribution Record"):
+            if st.form_submit_button("Submit Distribution"):
                 if not name or not kebeles:
-                    st.error("Missing Name or Location!")
+                    st.error("Error: Please provide Farmer Name and Location.")
                 else:
                     url = upload_to_drive(audio, name) if audio else None
                     new_f = Farmer(
                         name=name, phone=phone, woreda=sel_woreda, kebele=sel_kebele,
-                        registered_by=surveyor, audio_url=url,
+                        officer_name=officer, audio_url=url,
                         gesho=gesho, giravila=giravila, diceres=diceres, wanza=wanza,
                         papaya=papaya, moringa=moringa, lemon=lemon, 
                         arzelibanos=arzelibanos, guava=guava
                     )
                     db.add(new_f)
                     db.commit()
-                    st.success(f"✅ Record for {name} saved successfully!")
+                    st.success(f"✅ Distribution for {name} saved!")
         db.close()
 
     elif p == "Loc":
-        if st.button("⬅️ Back to Home"): nav("Home")
+        if st.button("⬅️ Home"): nav("Home")
         db = SessionLocal()
-        st.header("📍 Manage Distribution Areas")
-        nw = st.text_input("New Woreda Name")
-        if st.button("Add Woreda"):
+        st.header("📍 Distribution Areas")
+        nw = st.text_input("Add New Woreda")
+        if st.button("Save Woreda"):
             if nw: db.add(Woreda(name=nw)); db.commit(); st.rerun()
 
         for w in db.query(Woreda).all():
             with st.expander(f"📌 {w.name}"):
-                nk = st.text_input(f"New Kebele for {w.name}", key=f"k_{w.id}")
-                if st.button("Add Kebele", key=f"b_{w.id}"):
+                nk = st.text_input(f"Add Kebele to {w.name}", key=f"k_{w.id}")
+                if st.button("Save Kebele", key=f"b_{w.id}"):
                     if nk: db.add(Kebele(name=nk, woreda_id=w.id)); db.commit(); st.rerun()
-                for k in w.kebeles: st.write(f"- {k.name}")
+                for k in w.kebeles: st.write(f"• {k.name}")
         db.close()
 
     elif p == "Data":
-        if st.button("⬅️ Back to Home"): nav("Home")
-        st.header("📊 2026 Distribution Data")
+        if st.button("⬅️ Home"): nav("Home")
+        st.header("📊 Distribution Data 2026")
         db = SessionLocal()
         farmers = db.query(Farmer).all()
         if farmers:
-            # Clean dataframe for export
-            data_list = []
-            for f in farmers:
-                d = f.__dict__.copy()
-                d.pop('_sa_instance_state', None)
-                data_list.append(d)
-            df = pd.DataFrame(data_list)
-            st.download_button("📥 Export 2026 Data to CSV", df.to_csv(index=False).encode('utf-8'), "Amhara_2026_Distribution.csv")
+            df = pd.DataFrame([f.__dict__ for f in farmers]).drop('_sa_instance_state', axis=1)
+            st.download_button("📥 Export CSV", df.to_csv(index=False).encode('utf-8'), "Amhara_Distribution_2026.csv")
             st.dataframe(df)
-        else: st.info("No records recorded for 2026 yet.")
+        else: st.info("No distribution records found.")
         db.close()
 
 if __name__ == "__main__": main()
