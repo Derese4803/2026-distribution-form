@@ -11,7 +11,7 @@ import os
 try:
     from database import SessionLocal
     from models import Farmer, Woreda, Kebele, create_tables
-    from auth import check_auth
+    # Note: We don't need check_auth anymore
 except ImportError as e:
     st.error(f"❌ Critical Error: Missing files in repository! {e}")
     st.stop()
@@ -25,7 +25,6 @@ create_tables()
 def run_migrations():
     """Ensures all columns exist in the database even if added later."""
     db = SessionLocal()
-    # List of all columns for the Farmer table
     cols = [
         "gesho", "giravila", "diceres", "wanza", "papaya", 
         "moringa", "lemon", "arzelibanos", "guava", 
@@ -33,17 +32,16 @@ def run_migrations():
     ]
     for c in cols:
         try:
-            # Trees are integers, metadata are text
             dtype = "INTEGER DEFAULT 0" if c not in ["phone", "f_type", "registered_by", "audio_url"] else "TEXT"
             db.execute(text(f"ALTER TABLE farmers ADD COLUMN {c} {dtype}"))
             db.commit()
         except:
-            db.rollback() # Column likely already exists
+            db.rollback() 
     db.close()
 
 run_migrations()
 
-# --- 3. CLOUD STORAGE: GOOGLE DRIVE ---
+# --- 3. GOOGLE DRIVE UPLOAD ---
 def upload_to_drive(file, farmer_name):
     try:
         creds_info = st.secrets["gcp_service_account"]
@@ -60,7 +58,6 @@ def upload_to_drive(file, farmer_name):
         ).execute()
         
         fid = g_file.get('id')
-        # Set permission so anyone with the link can listen (for the CSV report)
         service.permissions().create(fileId=fid, body={'type': 'anyone', 'role': 'viewer'}).execute()
         return f"https://drive.google.com/uc?id={fid}"
     except Exception as e:
@@ -74,16 +71,13 @@ def nav(p):
 
 # --- 5. MAIN APPLICATION FLOW ---
 def main():
-    # Show Login Screen first (from auth.py)
-    check_auth()
-    
+    # LOGIN REMOVED: The app starts directly here
     if "page" not in st.session_state: 
         st.session_state["page"] = "Home"
     
-    st.sidebar.title(f"👤 {st.session_state['user']}")
-    if st.sidebar.button("Logout"):
-        del st.session_state["user"]
-        st.rerun()
+    # Sidebar only for navigation info now
+    st.sidebar.title("🚜 2025 Survey")
+    st.sidebar.info("Public Access Mode")
 
     page = st.session_state["page"]
 
@@ -111,7 +105,8 @@ def main():
             with col1:
                 name = st.text_input("Farmer Full Name")
                 phone = st.text_input("Phone Number")
-                f_type = st.selectbox("Farmer Type", ["Smallholder", "Commercial", "Subsistence"])
+                # Add a manual name for the surveyor since login is gone
+                surveyor_name = st.text_input("Surveyor Name (Your Name)")
             with col2:
                 w_list = [w.name for w in woredas] if woredas else ["No Woredas Found"]
                 sel_woreda = st.selectbox("Woreda", w_list)
@@ -143,18 +138,19 @@ def main():
                 if not name or not kebeles:
                     st.error("Missing Name or Location!")
                 else:
-                    with st.spinner("Uploading audio and saving data..."):
+                    with st.spinner("Saving..."):
                         url = upload_to_drive(audio, name) if audio else None
                         new_f = Farmer(
-                            name=name, phone=phone, f_type=f_type, woreda=sel_woreda, 
-                            kebele=sel_kebele, audio_url=url, registered_by=st.session_state['user'],
+                            name=name, phone=phone, woreda=sel_woreda, 
+                            kebele=sel_kebele, audio_url=url, 
+                            registered_by=surveyor_name, # Saved from the text input
                             gesho=gesho, giravila=giravila, diceres=diceres, wanza=wanza,
                             papaya=papaya, moringa=moringa, lemon=lemon, 
                             arzelibanos=arzelibanos, guava=guava
                         )
                         db.add(new_f)
                         db.commit()
-                        st.success(f"✅ Record for {name} saved successfully!")
+                        st.success(f"✅ Record for {name} saved!")
         db.close()
 
     # --- PAGE: LOCATIONS ---
@@ -162,11 +158,9 @@ def main():
         if st.button("⬅️ Back"): nav("Home")
         db = SessionLocal()
         st.header("📍 Location Management")
-        
-        with st.expander("➕ Add Woreda"):
-            nw = st.text_input("New Woreda Name")
-            if st.button("Save Woreda"):
-                if nw: db.add(Woreda(name=nw)); db.commit(); st.rerun()
+        nw = st.text_input("New Woreda Name")
+        if st.button("Save Woreda"):
+            if nw: db.add(Woreda(name=nw)); db.commit(); st.rerun()
 
         for w in db.query(Woreda).all():
             with st.expander(f"📌 {w.name}"):
@@ -183,28 +177,11 @@ def main():
         st.header("📊 Survey Records")
         db = SessionLocal()
         farmers = db.query(Farmer).all()
-        
         if farmers:
-            # Prepare data for display
-            data = []
-            for f in farmers:
-                data.append({
-                    "Name": f.name, "Woreda": f.woreda, "Kebele": f.kebele,
-                    "Phone": f.phone, "Gesho": f.gesho, "Wanza": f.wanza,
-                    "Lemon": f.lemon, "Moringa": f.moringa, "Guava": f.guava,
-                    "Total Trees": (f.gesho + f.wanza + f.lemon + f.giravila + f.papaya + 
-                                   f.arzelibanos + f.diceres + f.moringa + f.guava),
-                    "Audio Link": f.audio_url, "Surveyor": f.registered_by
-                })
-            df = pd.DataFrame(data)
-            
-            st.download_button(
-                "📥 Download Data as CSV", 
-                df.to_csv(index=False).encode('utf-8'), 
-                "Amhara_Survey_Data.csv", 
-                "text/csv"
-            )
-            st.dataframe(df, use_container_width=True)
+            # Drop unnecessary internal column for display
+            df = pd.DataFrame([f.__dict__ for f in farmers]).drop('_sa_instance_state', axis=1)
+            st.download_button("📥 Download CSV", df.to_csv(index=False).encode('utf-8'), "Survey_Data.csv")
+            st.dataframe(df)
         else:
             st.info("No records yet.")
         db.close()
