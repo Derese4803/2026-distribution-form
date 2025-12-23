@@ -1,42 +1,45 @@
 import streamlit as st
 
-# Define your authorized users here
+# 1. User Database
+# For small teams, you can manage users here. 
+# For higher security, you could move these to Streamlit Secrets.
 USERS = {
     "admin": "amhara2025",
-    "surveyor1": "field123",
-    "surveyor2": "field456"
+    "surveyor1": "field01",
+    "derese": "pass123",
+    "supervisor": "check2025"
 }
-
-def login_user(username, password):
-    """Checks if the username and password match our records."""
-    if username in USERS and USERS[username] == password:
-        return True
-    return False
-
-def logout():
-    """Clears the user session."""
-    if "user" in st.session_state:
-        del st.session_state["user"]
-    st.rerun()
 
 def check_auth():
     """
-    Call this at the top of main() to ensure 
-    the user is logged in before seeing the app.
+    Checks if the user is authenticated.
+    If not, it displays the login form and stops execution of the main app.
     """
     if "user" not in st.session_state:
         st.title("🚜 2025 Amhara Survey Login")
+        st.markdown("Please enter your credentials to access the registration system.")
         
+        # Create a login form
         with st.form("login_form"):
-            u = st.text_input("Username")
-            p = st.text_input("Password", type="password")
-            submit = st.form_submit_button("Enter System")
+            username = st.text_input("Username")
+            password = st.text_input("Password", type="password")
+            submit_button = st.form_submit_button("Enter System")
             
-            if submit:
-                if login_user(u, p):
-                    st.session_state["user"] = u
-                    st.success(f"Welcome {u}!")
-                    st.rerun()
+            if submit_button:
+                if username in USERS and USERS[username] == password:
+                    st.session_state["user"] = username
+                    st.success(f"Welcome, {username}!")
+                    st.rerun() # Refresh to show the main app
                 else:
-                    st.error("❌ Invalid Username or Password")
-        st.stop() # Stops the rest of app.py from running
+                    st.error("❌ Invalid Username or Password. Please try again.")
+        
+        # This stops the rest of app.py from running if not logged in
+        st.stop()
+
+def logout():
+    """Clears the session and logs the user out."""
+    if "user" in st.session_state:
+        del st.session_state["user"]
+    if "page" in st.session_state:
+        st.session_state["page"] = "Home"
+    st.rerun()
