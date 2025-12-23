@@ -11,7 +11,7 @@ from database import SessionLocal
 from models import Farmer, Woreda, Kebele, create_tables
 
 # --- INITIALIZATION ---
-st.set_page_config(page_title="Amhara Survey 2025", layout="wide", page_icon="🌳")
+st.set_page_config(page_title="Amhara distributio register form 2025", layout="wide", page_icon="🌳")
 create_tables()
 
 def run_migrations():
