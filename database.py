@@ -1,8 +1,7 @@
-from sqlalchemy import create_all, create_engine
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-# This creates a local file named 'oaf_nursery.db'
-# 'check_same_thread' is required for SQLite to work with Streamlit
+# Database connection
 DATABASE_URL = "sqlite:///./oaf_nursery.db"
 
 engine = create_engine(
