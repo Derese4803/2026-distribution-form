@@ -3,7 +3,7 @@ import pandas as pd
 from database import SessionLocal, engine
 from models import BackCheck, Base
 
-# --- CONFIGURATION ---
+# --- INITIALIZATION ---
 st.set_page_config(page_title="OAF Nursery Back Check", layout="wide", page_icon="🌳")
 
 def init_db():
@@ -23,6 +23,7 @@ def main():
     
     # --- SIDEBAR ---
     st.sidebar.title("OAF Nursery 🌳")
+    st.sidebar.markdown("---")
     if st.sidebar.button("📝 Registration Form / መመዝገቢያ ፎርም", use_container_width=True): nav("Form")
     if st.sidebar.button("📊 View Records / መረጃዎችን ይመልከቱ", use_container_width=True): nav("Data")
 
@@ -43,18 +44,18 @@ def main():
             p1, p2, p3, p4, p5 = st.columns(5)
             f_val = p1.text_input("FA Name (የFA ስም)")
             cb_val = p2.text_input("CBE Name (የCBE ስም)")
-            acc_val = p3.text_input("CBE ACC (የCBE ሂሳብ ቁጥር)") # Added Field
+            acc_val = p3.text_input("CBE ACC (የCBE ሂሳብ ቁጥር)")
             ph_val = p4.text_input("Phone (ስልክ)")
-            fn_val = p5.radio("Fenced? (አጥር?)", ["Yes", "No"], horizontal=True)
+            fn_val = p5.radio("Fenced? (አጥር?)", ["Yes (አዎ)", "No (የለም)"], horizontal=True)
 
             st.markdown("---")
 
             def bed_section(species, amharic):
                 st.markdown(f"### 🌿 {species} ({amharic})")
                 bc1, bc2, bc3 = st.columns(3)
-                n = bc1.number_input(f"{amharic} አልጋ #", min_value=0, step=1, key=f"n_{species}")
-                l = bc2.number_input(f"{amharic} ርዝመት (m)", min_value=0.0, step=0.1, key=f"l_{species}")
-                s = bc3.number_input(f"{amharic} ሶኬት ብዛት", min_value=0, step=1, key=f"s_{species}")
+                n = bc1.number_input(f"{amharic} beds #", min_value=0, step=1, key=f"n_{species}")
+                l = bc2.number_input(f"{amharic} length (m)", min_value=0.0, step=0.1, key=f"l_{species}")
+                s = bc3.number_input(f"{amharic} sockets", min_value=0, step=1, key=f"s_{species}")
                 return n, l, s
 
             g_n, g_l, g_s = bed_section("Guava", "ዘይቶን")
@@ -73,7 +74,7 @@ def main():
                     grevillea_beds=gr_n, grevillea_length=gr_l, grevillea_sockets=gr_s, total_grevillea_sockets=gr_n*gr_s
                 )
                 db.add(new_record); db.commit()
-                st.success("✅ Saved! / መረጃው ተመዝግቧል!")
+                st.success("✅ Saved Successfully! / መረጃው ተመዝግቧል!")
         db.close()
 
     # --- PAGE 2: DATA VIEW ---
@@ -84,7 +85,7 @@ def main():
         if records:
             df = pd.DataFrame([r.__dict__ for r in records])
             
-            # Reordered Columns with Groups
+            # Reordered Columns Grouped by Species
             ordered_cols = [
                 'id', 'woreda', 'cluster', 'kebele', 'tno_name',
                 'guava_beds', 'guava_length', 'guava_sockets', 'total_guava_sockets',
@@ -96,14 +97,14 @@ def main():
             
             final_df = df[[c for c in ordered_cols if c in df.columns]]
             
-            # AMHARIC TABLE HEADERS
+            # Amharic Display Headers
             rename_map = {
                 'woreda': 'ወረዳ', 'cluster': 'ክላስተር', 'kebele': 'ቀበሌ', 'tno_name': 'TNO ስም',
-                'cbe_acc': 'CBE ACC (ሂሳብ ቁጥር)',
-                'guava_beds': 'ዘይቶን አልጋ', 'guava_length': 'ዘይቶን ርዝመት', 'guava_sockets': 'ዘይቶን ሶኬት',
-                'gesho_beds': 'ጌሾ አልጋ', 'gesho_length': 'ጌሾ ርዝመት', 'gesho_sockets': 'ጌሾ ሶኬት',
-                'lemon_beds': 'ሎሚ አልጋ', 'lemon_length': 'ሎሚ ርዝመት', 'lemon_sockets': 'ሎሚ ሶኬት',
-                'grevillea_beds': 'ግራቪሊያ አልጋ', 'grevillea_length': 'ግራቪሊያ ርዝመት', 'grevillea_sockets': 'ግራቪሊያ ሶኬት'
+                'cbe_acc': 'CBE ACC', 'guava_beds': 'ዘይቶን አልጋ', 'guava_length': 'ዘይቶን ርዝመት',
+                'guava_sockets': 'ዘይቶን ሶኬት', 'gesho_beds': 'ጌሾ አልጋ', 'gesho_length': 'ጌሾ ርዝመት',
+                'gesho_sockets': 'ጌሾ ሶኬት', 'lemon_beds': 'ሎሚ አልጋ', 'lemon_length': 'ሎሚ ርዝመት',
+                'lemon_sockets': 'ሎሚ ሶኬት', 'grevillea_beds': 'ግራቪሊያ አልጋ', 'grevillea_length': 'ግራቪሊያ ርዝመት',
+                'grevillea_sockets': 'ግራቪሊያ ሶኬት'
             }
             
             st.dataframe(final_df.rename(columns=rename_map), use_container_width=True)
