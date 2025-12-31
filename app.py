@@ -49,7 +49,7 @@ def main():
             # Helper function for bed sections
             def bed_section(species, expected):
                 st.markdown(f"### 🌿 {species}")
-                st.caption(f"Note: We expect **{expected}** sockets in the width of the {species} beds.")
+                st.caption(f"Note: We expect **{expected}** sockets in the width.")
                 bc1, bc2, bc3 = st.columns(3)
                 n = bc1.number_input(f"{species} beds number", min_value=0, step=1, key=f"n_{species}")
                 l = bc2.number_input(f"Length of {species} beds (m)", min_value=0.0, step=0.1, key=f"l_{species}")
@@ -62,19 +62,17 @@ def main():
             l_n, l_l, l_s = bed_section("Lemon", 13)
             gr_n, gr_l, gr_s = bed_section("Grevillea", 16)
 
-            # Calculations
+            # Calculations (Lemon calculation removed)
             t_guava = g_n * g_s
             t_gesho = ge_n * ge_s
-            t_lemon = l_n * l_s
             t_grevillea = gr_n * gr_s
 
             st.markdown("---")
             st.subheader("📊 Automatic Calculations (Total Sockets)")
-            m1, m2, m3, m4 = st.columns(4)
+            m1, m2, m3 = st.columns(3)
             m1.metric("Total Guava", t_guava)
             m2.metric("Total Gesho", t_gesho)
-            m3.metric("Total Lemon", t_lemon)
-            m4.metric("Total Grevillea", t_grevillea)
+            m3.metric("Total Grevillea", t_grevillea)
 
             if st.form_submit_button("Submit OAF Back Check"):
                 if not woreda or not fa_name or not kebele:
@@ -85,7 +83,7 @@ def main():
                         checker_cbe_name=cbe_name, checker_phone=phone, fenced=fenced,
                         guava_beds=g_n, guava_length=g_l, guava_sockets=g_s, total_guava_sockets=t_guava,
                         gesho_beds=ge_n, gesho_length=ge_l, gesho_sockets=ge_s, total_gesho_sockets=t_gesho,
-                        lemon_beds=l_n, lemon_length=l_l, lemon_sockets=l_s, total_lemon_sockets=t_lemon,
+                        lemon_beds=l_n, lemon_length=l_l, lemon_sockets=l_s,
                         grevillea_beds=gr_n, grevillea_length=gr_l, grevillea_sockets=gr_s, total_grevillea_sockets=t_grevillea
                     )
                     db.add(new_record)
@@ -103,12 +101,12 @@ def main():
         if records:
             df = pd.DataFrame([r.__dict__ for r in records])
             
-            # --- ORDERED COLUMN LIST ---
+            # --- STRICT COLUMN ORDERING ---
             cols = [
                 'id', 'woreda', 'kebele', 'checker_fa_name', 'checker_cbe_name', 'checker_phone',
                 'guava_beds', 'guava_length', 'guava_sockets', 'total_guava_sockets',
                 'gesho_beds', 'gesho_length', 'gesho_sockets', 'total_gesho_sockets',
-                'lemon_beds', 'lemon_length', 'lemon_sockets', 'total_lemon_sockets',
+                'lemon_beds', 'lemon_length', 'lemon_sockets', # No total for Lemon
                 'grevillea_beds', 'grevillea_length', 'grevillea_sockets', 'total_grevillea_sockets',
                 'fenced', 'timestamp'
             ]
@@ -145,4 +143,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
