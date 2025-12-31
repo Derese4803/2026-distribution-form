@@ -11,6 +11,8 @@ class BackCheck(Base):
     # Location and Identifiers
     woreda = Column(String)
     kebele = Column(String)
+    cluster = Column(String)         # NEW
+    tno_name = Column(String)        # NEW
     checker_fa_name = Column(String)
     checker_cbe_name = Column(String) 
     checker_phone = Column(String)    
@@ -20,24 +22,23 @@ class BackCheck(Base):
     guava_beds = Column(Integer)
     guava_length = Column(Float)
     guava_sockets = Column(Integer)
-    total_guava_sockets = Column(Integer) # Calculated
+    total_guava_sockets = Column(Integer) 
 
     # Gesho Group
     gesho_beds = Column(Integer)
     gesho_length = Column(Float)
     gesho_sockets = Column(Integer)
-    total_gesho_sockets = Column(Integer) # Calculated
+    total_gesho_sockets = Column(Integer) 
 
     # Lemon Group
     lemon_beds = Column(Integer)
     lemon_length = Column(Float)
     lemon_sockets = Column(Integer)
-    # Total Lemon Removed
 
     # Grevillea Group
     grevillea_beds = Column(Integer)
     grevillea_length = Column(Float)
     grevillea_sockets = Column(Integer)
-    total_grevillea_sockets = Column(Integer) # Calculated
+    total_grevillea_sockets = Column(Integer) 
     
     timestamp = Column(DateTime, default=datetime.datetime.utcnow)
