@@ -11,7 +11,7 @@ def init_db():
 
 init_db()
 
-# --- NAVIGATION LOGIC ---
+# --- NAVIGATION ---
 if "page" not in st.session_state:
     st.session_state["page"] = "Form"
 
@@ -22,7 +22,6 @@ def nav(p):
 def main():
     page = st.session_state["page"]
     
-    # --- SIDEBAR ---
     st.sidebar.title("OAF Nursery 🌳")
     st.sidebar.markdown("---")
     if st.sidebar.button("📝 Registration Form", use_container_width=True): nav("Form")
@@ -50,7 +49,7 @@ def main():
             # Helper function for bed sections
             def bed_section(species, expected):
                 st.markdown(f"### 🌿 {species}")
-                st.caption(f"Note: We expect **{expected}** sockets in the width.")
+                st.caption(f"Note: We expect **{expected}** sockets in the width of the {species} beds.")
                 bc1, bc2, bc3 = st.columns(3)
                 n = bc1.number_input(f"{species} beds number", min_value=0, step=1, key=f"n_{species}")
                 l = bc2.number_input(f"Length of {species} beds (m)", min_value=0.0, step=0.1, key=f"l_{species}")
@@ -63,24 +62,31 @@ def main():
             l_n, l_l, l_s = bed_section("Lemon", 13)
             gr_n, gr_l, gr_s = bed_section("Grevillea", 16)
 
+            # Calculations
+            t_guava = g_n * g_s
+            t_gesho = ge_n * ge_s
+            t_lemon = l_n * l_s
+            t_grevillea = gr_n * gr_s
+
             st.markdown("---")
-            # Automatic Total for Lemon
-            total_l_sockets = l_n * l_s
-            st.metric("Total Lemon Sockets (Calculated)", total_l_sockets)
+            st.subheader("📊 Automatic Calculations (Total Sockets)")
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Total Guava", t_guava)
+            m2.metric("Total Gesho", t_gesho)
+            m3.metric("Total Lemon", t_lemon)
+            m4.metric("Total Grevillea", t_grevillea)
 
             if st.form_submit_button("Submit OAF Back Check"):
                 if not woreda or not fa_name or not kebele:
                     st.error("Woreda, Kebele, and FAs Name are required!")
                 else:
                     new_record = BackCheck(
-                        woreda=woreda, kebele=kebele,
-                        checker_fa_name=fa_name, checker_cbe_name=cbe_name,
-                        checker_phone=phone, fenced=fenced,
-                        guava_beds=g_n, guava_length=g_l, guava_sockets=g_s,
-                        gesho_beds=ge_n, gesho_length=ge_l, gesho_sockets=ge_s,
-                        lemon_beds=l_n, lemon_length=l_l, lemon_sockets=l_s,
-                        total_lemon_sockets=total_l_sockets,
-                        grevillea_beds=gr_n, grevillea_length=gr_l, grevillea_sockets=gr_s
+                        woreda=woreda, kebele=kebele, checker_fa_name=fa_name,
+                        checker_cbe_name=cbe_name, checker_phone=phone, fenced=fenced,
+                        guava_beds=g_n, guava_length=g_l, guava_sockets=g_s, total_guava_sockets=t_guava,
+                        gesho_beds=ge_n, gesho_length=ge_l, gesho_sockets=ge_s, total_gesho_sockets=t_gesho,
+                        lemon_beds=l_n, lemon_length=l_l, lemon_sockets=l_s, total_lemon_sockets=t_lemon,
+                        grevillea_beds=gr_n, grevillea_length=gr_l, grevillea_sockets=gr_s, total_grevillea_sockets=t_grevillea
                     )
                     db.add(new_record)
                     db.commit()
@@ -95,34 +101,29 @@ def main():
         records = db.query(BackCheck).all()
         
         if records:
-            # Create DataFrame
             df = pd.DataFrame([r.__dict__ for r in records])
             
-            # --- STRICT COLUMN ORDERING AS REQUESTED ---
+            # --- ORDERED COLUMN LIST ---
             cols = [
                 'id', 'woreda', 'kebele', 'checker_fa_name', 'checker_cbe_name', 'checker_phone',
-                'guava_beds', 'guava_length', 'guava_sockets',
-                'gesho_beds', 'gesho_length', 'gesho_sockets',
+                'guava_beds', 'guava_length', 'guava_sockets', 'total_guava_sockets',
+                'gesho_beds', 'gesho_length', 'gesho_sockets', 'total_gesho_sockets',
                 'lemon_beds', 'lemon_length', 'lemon_sockets', 'total_lemon_sockets',
-                'grevillea_beds', 'grevillea_length', 'grevillea_sockets',
+                'grevillea_beds', 'grevillea_length', 'grevillea_sockets', 'total_grevillea_sockets',
                 'fenced', 'timestamp'
             ]
             
-            # Select and clean up column names
             df = df[[c for c in cols if c in df.columns]]
             display_df = df.copy()
             display_df.columns = [c.replace('_', ' ').title() for c in display_df.columns]
             
-            # Show Table
             st.dataframe(display_df, use_container_width=True)
 
             st.markdown("---")
-            
-            # --- DELETE SECTION ---
             st.subheader("🗑️ Data Management")
-            del_col1, del_col2 = st.columns([1, 2])
+            del_c1, del_c2 = st.columns([1, 2])
             
-            with del_col1:
+            with del_c1:
                 id_to_del = st.number_input("Enter ID to Delete", min_value=1, step=1)
                 if st.button("❌ Delete Selected ID", type="primary"):
                     target = db.query(BackCheck).filter(BackCheck.id == id_to_del).first()
@@ -134,14 +135,14 @@ def main():
                     else:
                         st.error("ID not found.")
             
-            with del_col2:
+            with del_c2:
                 st.write("#### Export Options")
                 csv = df.to_csv(index=False).encode('utf-8')
-                st.download_button("📥 Download Excel/CSV", data=csv, file_name="OAF_Nursery_Data.csv", mime="text/csv")
-
+                st.download_button("📥 Download CSV", data=csv, file_name="OAF_Nursery_Data.csv", mime="text/csv")
         else:
-            st.info("No records have been submitted yet.")
+            st.info("No records found.")
         db.close()
 
 if __name__ == "__main__":
     main()
+    
