@@ -7,7 +7,7 @@ from models import BackCheck, Base
 st.set_page_config(page_title="OAF Nursery Back Check", layout="wide", page_icon="🌳")
 
 def init_db():
-    # This creates the tables. Remember to delete the old .db file first!
+    # This creates the table. If structure changes, delete the .db file first.
     Base.metadata.create_all(bind=engine)
 
 init_db()
@@ -22,7 +22,7 @@ def nav(p):
 def main():
     page = st.session_state["page"]
     
-    # --- SIDEBAR NAVIGATION ---
+    # --- SIDEBAR ---
     st.sidebar.title("OAF Nursery 🌳")
     st.sidebar.markdown("---")
     if st.sidebar.button("📝 Registration Form / መመዝገቢያ ፎርም", use_container_width=True): nav("Form")
@@ -44,19 +44,18 @@ def main():
 
             p1, p2, p3, p4 = st.columns(4)
             f_val = p1.text_input("FA Name (የFA ስም)")
-            acc_val = p2.text_input("CBE ACC (የCBE ሂሳብ ቁጥር)")
-            ph_val = p3.text_input("Phone (ስልክ)")
+            acc_val = p2.text_input("CBE Account (የCBE ሂሳብ ቁጥር)")
+            ph_val = p3.text_input("Phone (ስልክ ቁጥር)")
             fn_val = p4.radio("Fenced? (አጥር አለው?)", ["Yes (አዎ)", "No (የለም)"], horizontal=True)
 
             st.markdown("---")
 
-            # Helper for species sections
             def bed_section(species, amharic):
                 st.markdown(f"### 🌿 {species} ({amharic})")
                 bc1, bc2, bc3 = st.columns(3)
-                n = bc1.number_input(f"{amharic} beds # (የአልጋ ብዛት)", min_value=0, step=1, key=f"n_{species}")
-                l = bc2.number_input(f"{amharic} length (m) (ርዝመት)", min_value=0.0, step=0.1, key=f"l_{species}")
-                s = bc3.number_input(f"{amharic} sockets (የጎን ሶኬት)", min_value=0, step=1, key=f"s_{species}")
+                n = bc1.number_input(f"{amharic} beds #", min_value=0, step=1, key=f"n_{species}")
+                l = bc2.number_input(f"{amharic} length (m)", min_value=0.0, step=0.1, key=f"l_{species}")
+                s = bc3.number_input(f"{amharic} sockets", min_value=0, step=1, key=f"s_{species}")
                 return n, l, s
 
             g_n, g_l, g_s = bed_section("Guava", "ዘይቶን")
@@ -66,7 +65,7 @@ def main():
 
             if st.form_submit_button("Submit Data / መረጃውን መዝግብ"):
                 if not w_val or not k_val:
-                    st.error("Please fill Woreda and Kebele! / እባክዎ ወረዳ እና ቀበሌ ይሙሉ!")
+                    st.error("Woreda and Kebele are required!")
                 else:
                     try:
                         new_record = BackCheck(
@@ -83,7 +82,7 @@ def main():
                         st.success("✅ Saved Successfully! / መረጃው ተመዝግቧል!")
                         st.balloons()
                     except Exception as e:
-                        st.error(f"Error: {e}. Please ensure you deleted the old .db file.")
+                        st.error(f"Error: {e}")
         db.close()
 
     # --- PAGE 2: DATA VIEW ---
@@ -95,35 +94,36 @@ def main():
         if records:
             df = pd.DataFrame([r.__dict__ for r in records])
             
-            # --- STRICT COLUMN ORDERING ---
-            ordered_cols = [
-                'id', 'woreda', 'cluster', 'kebele', 'tno_name',
-                'guava_beds', 'guava_length', 'guava_sockets', 'total_guava_sockets',
-                'gesho_beds', 'gesho_length', 'gesho_sockets', 'total_gesho_sockets',
-                'lemon_beds', 'lemon_length', 'lemon_sockets', 'total_lemon_sockets',
-                'grevillea_beds', 'grevillea_length', 'grevillea_sockets', 'total_grevillea_sockets',
-                'checker_fa_name', 'cbe_acc', 'checker_phone', 'fenced', 'timestamp'
+            # --- THE EXACT ORDERED COLUMN LIST ---
+            column_order = [
+                'id', 'woreda', 'cluster', 'kebele', 'tno_name', 'checker_fa_name', 'cbe_acc', 'checker_phone',
+                'guava_beds', 'guava_length', 'guava_sockets',   # Guava Group
+                'gesho_beds', 'gesho_length', 'gesho_sockets',   # Gesho Group
+                'lemon_beds', 'lemon_length', 'lemon_sockets',   # Lemon Group
+                'grevillea_beds', 'grevillea_length', 'grevillea_sockets', # Grevillea Group
+                'fenced', 'timestamp'
             ]
             
-            # Filter and reorder
-            final_df = df[[c for c in ordered_cols if c in df.columns]]
+            # Filter existing columns and set order
+            df = df[[c for c in column_order if c in df.columns]]
             
-            # AMHARIC TABLE HEADERS
+            # Bilingual Header Map for Table
             rename_map = {
-                'id': 'ID', 'woreda': 'ወረዳ', 'cluster': 'ክላስተር', 'kebele': 'ቀበሌ', 'tno_name': 'TNO ስም',
-                'guava_beds': 'ዘይቶን አልጋ', 'guava_length': 'ዘይቶን ርዝመት', 'guava_sockets': 'ዘይቶን ሶኬት', 'total_guava_sockets': 'ድምር ዘይቶን',
-                'gesho_beds': 'ጌሾ አልጋ', 'gesho_length': 'ጌሾ ርዝመት', 'gesho_sockets': 'ጌሾ ሶኬት', 'total_gesho_sockets': 'ድምር ጌሾ',
-                'lemon_beds': 'ሎሚ አልጋ', 'lemon_length': 'ሎሚ ርዝመት', 'lemon_sockets': 'ሎሚ ሶኬት', 'total_lemon_sockets': 'ድምር ሎሚ',
-                'grevillea_beds': 'ግራቪሊያ አልጋ', 'grevillea_length': 'ግራቪሊያ ርዝመት', 'grevillea_sockets': 'ግራቪሊያ ሶኬት', 'total_grevillea_sockets': 'ድምር ግራቪሊያ',
-                'checker_fa_name': 'የFA ስም', 'cbe_acc': 'CBE ACC', 'checker_phone': 'ስልክ', 'fenced': 'አጥር', 'timestamp': 'ጊዜ'
+                'woreda': 'ወረዳ', 'cluster': 'ክላስተር', 'kebele': 'ቀበሌ', 'tno_name': 'TNO ስም',
+                'checker_fa_name': 'FA ስም', 'cbe_acc': 'CBE ACC', 'checker_phone': 'ስልክ',
+                'guava_beds': 'ዘይቶን አልጋ', 'guava_length': 'ዘይቶን ርዝመት', 'guava_sockets': 'ዘይቶን ሶኬት',
+                'gesho_beds': 'ጌሾ አልጋ', 'gesho_length': 'ጌሾ ርዝመት', 'gesho_sockets': 'ጌሾ ሶኬት',
+                'lemon_beds': 'ሎሚ አልጋ', 'lemon_length': 'ሎሚ ርዝመት', 'lemon_sockets': 'ሎሚ ሶኬት',
+                'grevillea_beds': 'ግራቪሊያ አልጋ', 'grevillea_length': 'ግራቪሊያ ርዝመት', 'grevillea_sockets': 'ግራቪሊያ ሶኬት',
+                'fenced': 'አጥር', 'timestamp': 'ጊዜ'
             }
             
-            st.dataframe(final_df.rename(columns=rename_map), use_container_width=True)
+            st.dataframe(df.rename(columns=rename_map), use_container_width=True)
             
-            csv = final_df.to_csv(index=False).encode('utf-8')
-            st.download_button("📥 Export CSV / መረጃውን አውርድ", data=csv, file_name="nursery_data.csv")
+            csv = df.to_csv(index=False).encode('utf-8')
+            st.download_button("📥 Export CSV", data=csv, file_name="nursery_records.csv")
         else:
-            st.info("No records found. / ምንም መረጃ የለም::")
+            st.info("No records found.")
         db.close()
 
 if __name__ == "__main__":
