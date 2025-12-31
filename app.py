@@ -8,7 +8,7 @@ st.set_page_config(page_title="OAF Nursery Back Check", layout="wide", page_icon
 
 def init_db():
     Base.metadata.create_all(bind=engine)
- 
+  
 init_db()
 
 # --- NAVIGATION ---
