@@ -24,12 +24,12 @@ def main():
     
     st.sidebar.title("OAF Nursery 🌳")
     st.sidebar.info("Back Check System")
-    if st.sidebar.button("📝 Registration Form", use_container_width=True): nav("Form")
-    if st.sidebar.button("📊 View Records", use_container_width=True): nav("Data")
+    if st.sidebar.button("🌳 Registration Form", use_container_width=True): nav("Form")
+    if st.sidebar.button("🌳 View Records", use_container_width=True): nav("Data")
 
     # --- PAGE: FORM ---
     if page == "Form":
-        st.title("🚜 OAF Nursery Back Check Form")
+        st.title("🌳 OAF Nursery Back Check Form")
         db = SessionLocal()
 
         with st.form("oaf_form", clear_on_submit=True):
