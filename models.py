@@ -10,30 +10,31 @@ class BackCheck(Base):
     
     # Location and Identifiers
     woreda = Column(String)
+    cluster = Column(String)
     kebele = Column(String)
-    cluster = Column(String)         # NEW
-    tno_name = Column(String)        # NEW
+    tno_name = Column(String)
     checker_fa_name = Column(String)
-    checker_cbe = Column(Integer) 
-    checker_phone = Column(Integer)    
+    checker_cbe_name = Column(String) 
+    checker_phone = Column(String)    
     fenced = Column(String)           
 
     # Guava Group
     guava_beds = Column(Integer)
     guava_length = Column(Float)
     guava_sockets = Column(Integer)
-    total_guava_sockets = Column(Integer) 
+    total_guava_sockets = Column(Integer)
 
     # Gesho Group
     gesho_beds = Column(Integer)
     gesho_length = Column(Float)
     gesho_sockets = Column(Integer)
-    total_gesho_sockets = Column(Integer) 
+    total_gesho_sockets = Column(Integer)
 
     # Lemon Group
     lemon_beds = Column(Integer)
     lemon_length = Column(Float)
     lemon_sockets = Column(Integer)
+    # Note: No total_lemon_sockets as per your request
 
     # Grevillea Group
     grevillea_beds = Column(Integer)
