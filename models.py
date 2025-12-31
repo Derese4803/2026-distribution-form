@@ -26,7 +26,7 @@ class Farmer(Base):
     kebele = Column(String)
     officer_name = Column(String)
     audio_url = Column(String)
-    # Seedling Counts
+    # Seedlings
     gesho = Column(Integer, default=0)
     giravila = Column(Integer, default=0)
     diceres = Column(Integer, default=0)
@@ -42,6 +42,8 @@ class BackCheck(Base):
     __tablename__ = 'back_checks'
     id = Column(Integer, primary_key=True)
     checker_name = Column(String)
+    woreda = Column(String)
+    kebele = Column(String)
     fenced = Column(String)
     # Guava
     guava_beds = Column(Integer)
@@ -51,6 +53,7 @@ class BackCheck(Base):
     lemon_beds = Column(Integer)
     lemon_length = Column(Float)
     lemon_sockets = Column(Integer)
+    total_lemon_sockets = Column(Integer) # Automatic Calculation field
     # Gesho
     gesho_beds = Column(Integer)
     gesho_length = Column(Float)
