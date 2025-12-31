@@ -46,7 +46,7 @@ def main():
             # Row 2: Personnel
             p1, p2, p3, p4 = st.columns(4)
             fa_name = p1.text_input("Name of Back checker FAs (የFA ስም)")
-            cbe_name = p2.text_input("Back checker CBE (የCBE ስም)")
+            cbe_name = p2.text_input("Back checker CBE (CBE )")
             phone = p3.text_input("Back checker phone # (ስልክ ቁጥር)")
             fenced = p4.radio("Is Nursery Fenced? (አጥር አለው?)", ["Yes (አዎ)", "No (የለም)"], horizontal=True)
 
