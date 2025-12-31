@@ -8,37 +8,21 @@ from sqlalchemy import text
 import os
 
 # --- 1. IMPORT LOCAL MODULES ---
-from database import SessionLocal
-from models import Farmer, Woreda, Kebele, create_tables
+# Ensure BackCheck is imported from your models
+from database import SessionLocal, engine
+from models import Farmer, Woreda, Kebele, BackCheck, Base
 
 # --- 2. CONFIGURATION ---
 st.set_page_config(
-    page_title="Amhara 2026 Distribution Register Form", 
+    page_title="Amhara 2026 Distribution & Back Check", 
     layout="wide", 
     page_icon="🌳"
 )
 
-# Initialize Database
+def create_tables():
+    Base.metadata.create_all(bind=engine)
+
 create_tables()
-
-def run_migrations():
-    """Ensures database columns exist to prevent errors during updates."""
-    db = SessionLocal()
-    cols = [
-        "gesho", "giravila", "diceres", "wanza", "papaya", 
-        "moringa", "lemon", "arzelibanos", "guava", 
-        "phone", "officer_name", "audio_url"
-    ]
-    for c in cols:
-        try:
-            dtype = "INTEGER DEFAULT 0" if c not in ["phone", "officer_name", "audio_url"] else "TEXT"
-            db.execute(text(f"ALTER TABLE farmers ADD COLUMN {c} {dtype}"))
-            db.commit()
-        except Exception:
-            db.rollback() 
-    db.close()
-
-run_migrations()
 
 # --- 3. GOOGLE DRIVE UPLOAD ---
 def upload_to_drive(file, farmer_name):
@@ -74,21 +58,21 @@ def nav(p):
 # --- 5. MAIN UI ---
 def main():
     st.sidebar.title("🌳 Amhara 2026")
-    st.sidebar.caption("Distribution System")
+    st.sidebar.info("Nursery & Distribution Management")
     
     page = st.session_state["page"]
 
     # --- PAGE: HOME ---
     if page == "Home":
-        st.title("🚜 Amhara 2026 Distribution Register Form")
+        st.title("🚜 Amhara 2026 Management System")
         st.markdown("---")
-        c1, c2, c3 = st.columns(3)
+        c1, c2 = st.columns(2)
         with c1:
-            if st.button("📝 NEW REGISTRATION", use_container_width=True, type="primary"): nav("Reg")
-        with c2:
+            if st.button("📝 NEW DISTRIBUTION REGISTRATION", use_container_width=True, type="primary"): nav("Reg")
             if st.button("📍 MANAGE LOCATIONS", use_container_width=True): nav("Loc")
-        with c3:
-            if st.button("📊 VIEW SURVEY DATA", use_container_width=True): nav("Data")
+        with c2:
+            if st.button("🔍 NURSERY BACK CHECK", use_container_width=True, type="secondary"): nav("BackCheck")
+            if st.button("📊 VIEW ALL DATA", use_container_width=True): nav("Data")
 
     # --- PAGE: REGISTRATION ---
     elif page == "Reg":
@@ -132,12 +116,11 @@ def main():
             audio = st.file_uploader("🎤 Audio Confirmation", type=['mp3', 'wav', 'm4a'])
             
             if st.form_submit_button("Submit Distribution Record"):
-                if not name or not kebeles or not officer:
-                    st.error("Please fill in Name, Officer, and Location!")
+                if not name or not officer:
+                    st.error("Please fill in Name and Officer!")
                 else:
-                    with st.spinner("Saving data..."):
+                    with st.spinner("Saving..."):
                         url = upload_to_drive(audio, name) if audio else None
-                        # 'officer_name' matches 'models.py'
                         new_f = Farmer(
                             name=name, phone=phone, woreda=sel_woreda, 
                             kebele=sel_kebele, officer_name=officer,
@@ -148,7 +131,70 @@ def main():
                         )
                         db.add(new_f)
                         db.commit()
-                        st.success(f"✅ Record for {name} saved successfully!")
+                        st.success(f"✅ Record for {name} saved!")
+        db.close()
+
+    # --- PAGE: BACK CHECK ---
+    elif page == "BackCheck":
+        if st.button("⬅️ Back"): nav("Home")
+        st.header("🔍 Nursery Back Check Form")
+        st.info("Verify nursery bed dimensions and counts.")
+
+        with st.form("back_check_form", clear_on_submit=True):
+            c1, c2 = st.columns(2)
+            checker = c1.text_input("Back Checker Name")
+            fenced = c2.selectbox("Does the Nursery have Fenced?", ["Yes", "No"])
+
+            def bed_row(species, expected):
+                st.markdown(f"#### {species} (Expected Width: {expected} sockets)")
+                col1, col2, col3 = st.columns(3)
+                b_num = col1.number_input(f"{species} beds number", min_value=0, key=f"{species}_n")
+                b_len = col2.number_input(f"Length of {species} beds (m)", min_value=0.0, step=0.1, key=f"{species}_l")
+                b_sock = col3.number_input(f"Number of sockets in width", min_value=0, key=f"{species}_s", help=f"We expect {expected}")
+                return b_num, b_len, b_sock
+
+            g_num, g_len, g_sock = bed_row("Guava", 13)
+            l_num, l_len, l_sock = bed_row("Lemon", 13)
+            ge_num, ge_len, ge_sock = bed_row("Gesho", 16)
+            gr_num, gr_len, gr_sock = bed_row("Grevillea", 16)
+
+            if st.form_submit_button("Submit Back Check"):
+                if not checker:
+                    st.error("Checker name is required!")
+                else:
+                    db = SessionLocal()
+                    new_bc = BackCheck(
+                        checker_name=checker, fenced=fenced,
+                        guava_beds=g_num, guava_length=g_len, guava_sockets=g_sock,
+                        lemon_beds=l_num, lemon_length=l_len, lemon_sockets=l_sock,
+                        gesho_beds=ge_num, gesho_length=ge_len, gesho_sockets=ge_sock,
+                        grevillea_beds=gr_num, grevillea_length=gr_len, grevillea_sockets=gr_sock
+                    )
+                    db.add(new_bc)
+                    db.commit()
+                    db.close()
+                    st.success("✅ Back Check record saved successfully!")
+
+    # --- PAGE: DATA VIEW ---
+    elif page == "Data":
+        if st.button("⬅️ Back"): nav("Home")
+        db = SessionLocal()
+        
+        tab1, tab2 = st.tabs(["Farmer Distribution", "Nursery Back Checks"])
+        
+        with tab1:
+            farmers = db.query(Farmer).all()
+            if farmers:
+                df1 = pd.DataFrame([f.__dict__ for f in farmers]).drop('_sa_instance_state', axis=1, errors='ignore')
+                st.dataframe(df1)
+            else: st.info("No distribution data.")
+
+        with tab2:
+            checks = db.query(BackCheck).all()
+            if checks:
+                df2 = pd.DataFrame([c.__dict__ for c in checks]).drop('_sa_instance_state', axis=1, errors='ignore')
+                st.dataframe(df2)
+            else: st.info("No back check data.")
         db.close()
 
     # --- PAGE: LOCATIONS ---
@@ -165,39 +211,6 @@ def main():
                 nk = st.text_input(f"Add Kebele to {w.name}", key=f"k_{w.id}")
                 if st.button("Add Kebele", key=f"b_{w.id}"):
                     if nk: db.add(Kebele(name=nk, woreda_id=w.id)); db.commit(); st.rerun()
-                for k in w.kebeles:
-                    st.write(f"- {k.name}")
-        db.close()
-
-    # --- PAGE: DATA VIEW ---
-    elif page == "Data":
-        if st.button("⬅️ Back"): nav("Home")
-        st.header("📊 Distribution Data")
-        db = SessionLocal()
-        farmers = db.query(Farmer).all()
-        
-        if farmers:
-            data = []
-            for f in farmers:
-                d = f.__dict__.copy()
-                d.pop('_sa_instance_state', None)
-                data.append(d)
-            df = pd.DataFrame(data)
-
-            # Search Bar
-            search = st.text_input("🔍 Search by Farmer Name or Phone")
-            if search:
-                df = df[df['name'].str.contains(search, case=False) | df['phone'].str.contains(search)]
-
-            st.download_button(
-                "📥 Download CSV", 
-                df.to_csv(index=False).encode('utf-8'), 
-                "Amhara_2026_Distribution.csv", 
-                "text/csv"
-            )
-            st.dataframe(df, use_container_width=True)
-        else:
-            st.info("No records recorded yet.")
         db.close()
 
 if __name__ == "__main__":
