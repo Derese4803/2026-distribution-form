@@ -34,7 +34,7 @@ class BackCheck(Base):
     lemon_beds = Column(Integer)
     lemon_length = Column(Float)
     lemon_sockets = Column(Integer)
-    # Note: No total_lemon_sockets as per your request
+    total_lemon_sockets = Column(Integer) # RE-ADDED
 
     # Grevillea Group
     grevillea_beds = Column(Integer)
