@@ -26,22 +26,17 @@ init_db()
 def process_photo(file):
     return base64.b64encode(file.getvalue()).decode() if file else None
 
-if "page" not in st.session_state: 
-    st.session_state["page"] = "Form"
+if "page" not in st.session_state: st.session_state["page"] = "Form"
 
 def nav(p):
     st.session_state["page"] = p
     st.rerun()
 
 def main():
-    # --- SIDEBAR / የጎን አሞሌ ---
     st.sidebar.title("OAF Nursery 🌳")
-    if st.sidebar.button("📝 Registration Form / መመዝገቢያ ፎርም", use_container_width=True): 
-        nav("Form")
-    if st.sidebar.button("📊 View Data / መረጃዎችን ይመልከቱ", use_container_width=True): 
-        nav("Data")
+    if st.sidebar.button("📝 Registration / መመዝገቢያ ፎርም", use_container_width=True): nav("Form")
+    if st.sidebar.button("📊 View Data / መረጃዎችን ይመልከቱ", use_container_width=True): nav("Data")
 
-    # --- PAGE 1: FORM / መመዝገቢያ ---
     if st.session_state["page"] == "Form":
         st.title("🚜 Nursery Back Check / የችግኝ ጣቢያ ቁጥጥር")
         db = SessionLocal()
@@ -63,9 +58,9 @@ def main():
                 st.markdown(f"--- \n### 🌿 {name} ({amharic})")
                 st.info(f"💡 Expected width: {exp} sockets / የሚጠበቀው የጎን ስፋት: {exp}")
                 sc1, sc2, sc3 = st.columns(3)
-                nb = sc1.number_input(f"Beds / የ{amharic} አልጋዎች ብዛት", 0, key=f"n_{name}")
-                ln = sc2.number_input(f"Length (m) / የአልጋው ርዝመት", 0.0, key=f"l_{name}")
-                sk = sc3.number_input(f"Sockets Wide / የጎን ሶኬቶች ብዛት", 0, key=f"s_{name}")
+                nb = sc1.number_input(f"Beds / የ{amharic} አልጋዎች", 0, key=f"n_{name}")
+                ln = sc2.number_input(f"Length (m) / ርዝመት", 0.0, key=f"l_{name}")
+                sk = sc3.number_input(f"Sockets Wide / ሶኬቶች", 0, key=f"s_{name}")
                 return nb, ln, sk
 
             g_n, g_l, g_s = section("Guava", "ዘይቶን", 13)
@@ -81,87 +76,57 @@ def main():
             if st.form_submit_button("Submit Data / መረጃውን መዝግብ"):
                 def get_r(v, e, n): return f"{n}: {v-e:+}" if v != 0 and v != e else ""
                 auto = " | ".join(filter(None, [get_r(g_s, 13, "Guava"), get_r(ge_s, 16, "Gesho"), get_r(l_s, 13, "Lemon"), get_r(gr_s, 16, "Grev")]))
-                
                 try:
-                    new_rec = BackCheck(
-                        woreda=w, cluster=cl, kebele=k, tno_name=t, checker_fa_name=fa, 
-                        cbe_acc=acc, checker_phone=ph, fenced=fn, guava_beds=g_n, guava_length=g_l,
-                        guava_sockets=g_s, total_guava_sockets=g_n*g_s, gesho_beds=ge_n, 
-                        gesho_length=ge_l, gesho_sockets=ge_s, total_gesho_sockets=ge_n*ge_s,
+                    new_rec = BackCheck(woreda=w, cluster=cl, kebele=k, tno_name=t, checker_fa_name=fa, cbe_acc=acc, checker_phone=ph, fenced=fn,
+                        guava_beds=g_n, guava_length=g_l, guava_sockets=g_s, total_guava_sockets=g_n*g_s,
+                        gesho_beds=ge_n, gesho_length=ge_l, gesho_sockets=ge_s, total_gesho_sockets=ge_n*ge_s,
                         lemon_beds=l_n, lemon_length=l_l, lemon_sockets=l_s, total_lemon_sockets=l_n*l_s,
-                        grevillea_beds=gr_n, grevillea_length=gr_l, grevillea_sockets=gr_s, 
-                        total_grevillea_sockets=gr_n*gr_s, auto_remark=auto, general_remark=rem, 
-                        photo=process_photo(up_img)
-                    )
-                    db.add(new_rec); db.commit()
-                    st.success("✅ Saved Successfully! / መረጃው በተሳካ ሁኔታ ተመዝግቧል!")
-                except Exception as e:
-                    st.error(f"Error / ስህተት: {e}")
+                        grevillea_beds=gr_n, grevillea_length=gr_l, grevillea_sockets=gr_s, total_grevillea_sockets=gr_n*gr_s,
+                        auto_remark=auto, general_remark=rem, photo=process_photo(up_img))
+                    db.add(new_rec); db.commit(); st.success("✅ Saved! / መረጃው ተመዝግቧል!")
+                except Exception as e: st.error(f"Error: {e}")
         db.close()
 
-    # --- PAGE 2: DATA VIEW / መረጃ ---
     elif st.session_state["page"] == "Data":
         if check_password():
-            st.title("📊 Recorded Data / የተመዘገቡ መረጃዎች")
+            st.title("📊 Recorded Data / መረጃዎች")
             db = SessionLocal()
             query = db.query(BackCheck)
-            
-            search = st.text_input("🔍 Search Kebele or FA / ቀበሌ ወይም FA ስም በመጠቀም ይፈልጉ")
-            if search:
-                query = query.filter((BackCheck.kebele.contains(search)) | (BackCheck.checker_fa_name.contains(search)))
+            search = st.text_input("🔍 Search Kebele or FA / በስም ወይም በቀበሌ ይፈልጉ")
+            if search: query = query.filter((BackCheck.kebele.contains(search)) | (BackCheck.checker_fa_name.contains(search)))
             
             recs = query.all()
             if recs:
-                # 1. ZIP Photo Export
                 buf = BytesIO()
                 with zipfile.ZipFile(buf, "a", zipfile.ZIP_DEFLATED, False) as zf:
                     for r in recs:
                         if r.photo: zf.writestr(f"ID_{r.id}_{r.kebele}.jpg", base64.b64decode(r.photo))
                 
-                # 2. STRICT EXCEL ORDERING
+                # --- STRICT EXCEL ORDERING ---
                 df_raw = pd.DataFrame([r.__dict__ for r in recs])
+                col_order = ['id', 'woreda', 'cluster', 'kebele', 'tno_name', 'checker_fa_name', 'cbe_acc', 'checker_phone',
+                             'guava_beds', 'total_guava_sockets', 'gesho_beds', 'total_gesho_sockets', 
+                             'lemon_beds', 'total_lemon_sockets', 'grevillea_beds', 'total_grevillea_sockets',
+                             'fenced', 'auto_remark', 'general_remark', 'timestamp']
+                mapping = {'id': 'ID', 'woreda': 'Woreda / ወረዳ', 'cluster': 'Cluster / ክላስተር', 'kebele': 'Kebele / ቀበሌ',
+                           'tno_name': 'TNO Name', 'checker_fa_name': 'FA Name', 'cbe_acc': 'CBE Account', 'checker_phone': 'Phone Number',
+                           'guava_beds': 'Guava Beds', 'total_guava_sockets': 'Total Guava', 'gesho_beds': 'Gesho Beds', 'total_gesho_sockets': 'Total Gesho',
+                           'lemon_beds': 'Lemon Beds', 'total_lemon_sockets': 'Total Lemon', 'grevillea_beds': 'Grev Beds', 'total_grevillea_sockets': 'Total Grev',
+                           'fenced': 'Fenced?', 'auto_remark': 'System Status', 'general_remark': 'Remarks', 'timestamp': 'Date'}
                 
-                column_order = [
-                    'id', 'woreda', 'cluster', 'kebele', 'tno_name', 'checker_fa_name', 'cbe_acc', 'checker_phone',
-                    'guava_beds', 'total_guava_sockets', 'gesho_beds', 'total_gesho_sockets', 
-                    'lemon_beds', 'total_lemon_sockets', 'grevillea_beds', 'total_grevillea_sockets',
-                    'fenced', 'auto_remark', 'general_remark', 'timestamp'
-                ]
-
-                mapping = {
-                    'id': 'ID', 'woreda': 'Woreda / ወረዳ', 'cluster': 'Cluster / ክላስተር', 'kebele': 'Kebele / ቀበሌ',
-                    'tno_name': 'TNO Name', 'checker_fa_name': 'FA Name', 'cbe_acc': 'CBE Account', 'checker_phone': 'Phone Number',
-                    'guava_beds': 'Guava Beds', 'total_guava_sockets': 'Total Guava',
-                    'gesho_beds': 'Gesho Beds', 'total_gesho_sockets': 'Total Gesho',
-                    'lemon_beds': 'Lemon Beds', 'total_lemon_sockets': 'Total Lemon',
-                    'grevillea_beds': 'Grev Beds', 'total_grevillea_sockets': 'Total Grev',
-                    'fenced': 'Fenced?', 'auto_remark': 'System Status', 'general_remark': 'Remarks', 'timestamp': 'Date'
-                }
-
-                # Filter and order the dataframe
-                final_cols = [c for c in column_order if c in df_raw.columns]
-                df_ordered = df_raw[final_cols].rename(columns=mapping)
-
-                # 3. Download Section
+                df_final = df_raw[[c for c in col_order if c in df_raw.columns]].rename(columns=mapping)
                 c1, c2 = st.columns(2)
                 c1.download_button("🖼️ Photo ZIP / ፎቶዎችን አውርድ", buf.getvalue(), "photos.zip", use_container_width=True)
-                
-                # utf-8-sig makes Amharic readable in Excel
-                csv_data = df_ordered.to_csv(index=False).encode('utf-8-sig')
-                c2.download_button("📥 Excel Data / መረጃውን በኤክሴል አውርድ", csv_data, "nursery_report.csv", "text/csv", use_container_width=True)
+                c2.download_button("📥 Excel Data / መረጃውን አውርድ", df_final.to_csv(index=False).encode('utf-8-sig'), "data.csv", "text/csv", use_container_width=True)
 
-                st.markdown("---")
                 for r in recs:
                     with st.container(border=True):
                         col_t, col_i = st.columns([3, 1])
                         col_t.subheader(f"📍 {r.kebele} (ID: {r.id})")
                         col_t.write(f"**FA:** {r.checker_fa_name} | **Status:** {r.auto_remark}")
-                        col_t.info(f"**Remarks:** {r.general_remark}")
-                        if r.photo: col_i.image(base64.b64decode(r.photo), caption="Nursery Photo")
-                        if st.button(f"🗑️ Delete Record {r.id} / አጥፋ", key=f"d_{r.id}"):
+                        if r.photo: col_i.image(base64.b64decode(r.photo), width=150)
+                        if st.button(f"🗑️ Delete Record {r.id}", key=f"d_{r.id}"):
                             db.delete(r); db.commit(); st.rerun()
-            else:
-                st.info("No records found. / ምንም መረጃ አልተገኘም።")
             db.close()
 
 if __name__ == "__main__": main()
