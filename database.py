@@ -2,7 +2,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-DATABASE_URL = "sqlite:///./oaf_nursery.db"
+# Changing the name to v2 forces a fresh, clean database
+DATABASE_URL = "sqlite:///./oaf_nursery_v2.db"
 
 engine = create_engine(
     DATABASE_URL, 
