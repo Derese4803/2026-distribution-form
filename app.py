@@ -9,7 +9,7 @@ from models import BackCheck, Base
 from auth import check_password
 
 # --- INITIALIZATION ---
-st.set_page_config(page_title="OAF Nursery Back Check", layout="wide", page_icon="🌳")
+st.set_page_config(page_title="OAF Nursery", layout="wide", page_icon="🌳")
 
 def init_db():
     Base.metadata.create_all(bind=engine)
@@ -27,7 +27,6 @@ def process_photo(file):
     return base64.b64encode(file.getvalue()).decode() if file else None
 
 if "page" not in st.session_state: st.session_state["page"] = "Form"
-
 def nav(p):
     st.session_state["page"] = p
     st.rerun()
@@ -38,10 +37,10 @@ def main():
     if st.sidebar.button("📝 Registration Form / መመዝገቢያ ፎርም", use_container_width=True): nav("Form")
     if st.sidebar.button("📊 View Data / መረጃዎችን ይመልከቱ", use_container_width=True): nav("Data")
 
+    # --- PAGE 1: FORM ---
     if st.session_state["page"] == "Form":
-        st.title("🚜 Nursery Back Check Form / የችግኝ ጣቢያ ቁጥጥር ፎርም")
+        st.title("🚜 Nursery Back Check / የችግኝ ጣቢያ ቁጥጥር")
         db = SessionLocal()
-        
         with st.form("main_form", clear_on_submit=True):
             st.subheader("📍 Location & Personnel / ቦታ እና ሰራተኛ")
             c1, c2, c3, c4 = st.columns(4)
@@ -55,12 +54,6 @@ def main():
             acc = p2.text_input("CBE Account / የCBE ሂሳብ ቁጥር")
             ph = p3.text_input("Phone Number / ስልክ ቁጥር")
             fn = p4.radio("Is it Fenced? / አጥር አለው?", ["Yes / አዎ", "No / የለም"], horizontal=True)
-
-            # Calculation Logic
-            def get_rem(val, exp, name):
-                if val == 0: return ""
-                if val == exp: return f"{name}: Correct"
-                return f"{name}: {val-exp:+} difference"
 
             def section(name, amharic, exp):
                 st.markdown(f"--- \n### 🌿 {name} ({amharic})")
@@ -77,69 +70,67 @@ def main():
             gr_n, gr_l, gr_s = section("Grevillea", "ግራቪሊያ", 16)
 
             st.markdown("---")
-            st.subheader("📸 Upload Photo & Remarks / ፎቶ እና ማስታወሻ")
+            st.subheader("📸 Photo & Remarks / ፎቶ እና ማስታወሻ")
             up_img = st.file_uploader("Upload Nursery Photo / የችግኝ ጣቢያውን ፎቶ ይጫኑ", type=['jpg', 'png', 'jpeg'])
-            rem = st.text_area("General Remarks / አጠቃላይ አስተያየት", placeholder="ማንኛውም ተጨማሪ መረጃ እዚህ ይጻፉ...")
+            rem = st.text_area("General Remarks / አጠቃላይ አስተያየት")
 
             if st.form_submit_button("Submit Data / መረጃውን መዝግብ"):
-                auto = " | ".join(filter(None, [
-                    get_rem(g_s, 13, "Guava"), get_rem(ge_s, 16, "Gesho"), 
-                    get_rem(l_s, 13, "Lemon"), get_rem(gr_s, 16, "Grev")
-                ]))
+                def get_r(v, e, n): return f"{n}: {v-e:+}" if v != 0 and v != e else ""
+                auto = " | ".join(filter(None, [get_r(g_s, 13, "Guava"), get_r(ge_s, 16, "Gesho"), get_r(l_s, 13, "Lemon"), get_r(gr_s, 16, "Grev")]))
                 
                 try:
-                    new_rec = BackCheck(
-                        woreda=w, cluster=cl, kebele=k, tno_name=t, checker_fa_name=fa, 
-                        cbe_acc=acc, checker_phone=ph, fenced=fn, guava_beds=g_n, guava_length=g_l,
-                        guava_sockets=g_s, total_guava_sockets=g_n*g_s, gesho_beds=ge_n, 
-                        gesho_length=ge_l, gesho_sockets=ge_s, total_gesho_sockets=ge_n*ge_s,
-                        lemon_beds=l_n, lemon_length=l_l, lemon_sockets=l_s, total_lemon_sockets=l_n*l_s,
-                        grevillea_beds=gr_n, grevillea_length=gr_l, grevillea_sockets=gr_s, 
-                        total_grevillea_sockets=gr_n*gr_s, auto_remark=auto, general_remark=rem, 
-                        photo=process_photo(up_img)
-                    )
+                    new_rec = BackCheck(woreda=w, cluster=cl, kebele=k, tno_name=t, checker_fa_name=fa, 
+                                       cbe_acc=acc, checker_phone=ph, fenced=fn, guava_beds=g_n, guava_length=g_l,
+                                       guava_sockets=g_s, total_guava_sockets=g_n*g_s, gesho_beds=ge_n, 
+                                       gesho_length=ge_l, gesho_sockets=ge_s, total_gesho_sockets=ge_n*ge_s,
+                                       lemon_beds=l_n, lemon_length=l_l, lemon_sockets=l_s, total_lemon_sockets=l_n*l_s,
+                                       grevillea_beds=gr_n, grevillea_length=gr_l, grevillea_sockets=gr_s, 
+                                       total_grevillea_sockets=gr_n*gr_s, auto_remark=auto, general_remark=rem, 
+                                       photo=process_photo(up_img))
                     db.add(new_rec); db.commit()
                     st.success("✅ Saved Successfully! / መረጃው በተሳካ ሁኔታ ተመዝግቧል!")
                 except Exception as e:
                     st.error(f"Error / ስህተት: {e}")
         db.close()
 
+    # --- PAGE 2: DATA VIEW ---
     elif st.session_state["page"] == "Data":
         if check_password():
             st.title("📊 Recorded Data / የተመዘገቡ መረጃዎች")
             db = SessionLocal()
-            recs = db.query(BackCheck).all()
+            query = db.query(BackCheck)
             
+            # Search Bar
+            search = st.text_input("🔍 Search Kebele or FA / ቀበሌ ወይም FA ስም በመጠቀም ይፈልጉ")
+            if search:
+                query = query.filter((BackCheck.kebele.contains(search)) | (BackCheck.checker_fa_name.contains(search)))
+            
+            recs = query.all()
             if recs:
-                # Photo ZIP Download
+                # ZIP and CSV Buttons
                 buf = BytesIO()
                 with zipfile.ZipFile(buf, "a", zipfile.ZIP_DEFLATED, False) as zf:
                     for r in recs:
-                        if r.photo: 
-                            zf.writestr(f"ID_{r.id}_{r.kebele}.jpg", base64.b64decode(r.photo))
+                        if r.photo: zf.writestr(f"ID_{r.id}_{r.kebele}.jpg", base64.b64decode(r.photo))
                 
-                c_csv, c_zip = st.columns(2)
-                c_zip.download_button("🖼️ Download All Photos (ZIP) / ሁሉንም ፎቶዎች አውርድ", buf.getvalue(), "nursery_photos.zip", use_container_width=True)
-                
+                c1, c2 = st.columns(2)
+                c1.download_button("🖼️ Photo ZIP / ፎቶዎችን አውርድ", buf.getvalue(), "photos.zip", use_container_width=True)
                 df = pd.DataFrame([r.__dict__ for r in recs])
-                if '_sa_instance_state' in df.columns: df.drop(columns=['_sa_instance_state', 'photo'], inplace=True)
-                c_csv.download_button("📥 Download CSV Data / መረጃውን በCSV አውርድ", df.to_csv(index=False), "nursery_data.csv", use_container_width=True)
+                if 'photo' in df.columns: df.drop(columns=['_sa_instance_state', 'photo'], inplace=True)
+                c2.download_button("📥 Excel Data / መረጃውን አውርድ (CSV)", df.to_csv(index=False), "data.csv", use_container_width=True)
 
                 st.markdown("---")
                 for r in recs:
                     with st.container(border=True):
-                        c_t, c_i = st.columns([3, 1])
-                        c_t.subheader(f"📍 {r.kebele} (ID: {r.id})")
-                        c_t.write(f"**FA:** {r.checker_fa_name} | **CBE:** {r.cbe_acc}")
-                        c_t.write(f"**Status / ሁኔታ:** {r.auto_remark}")
-                        c_t.info(f"**Remarks / አስተያየት:** {r.general_remark}")
-                        
-                        if r.photo: c_i.image(base64.b64decode(r.photo), caption="Nursery Photo")
-                        
+                        col_t, col_i = st.columns([3, 1])
+                        col_t.subheader(f"📍 {r.kebele} (ID: {r.id})")
+                        col_t.write(f"**FA:** {r.checker_fa_name} | **Status / ሁኔታ:** {r.auto_remark}")
+                        col_t.info(f"**Notes / ማስታወሻ:** {r.general_remark}")
+                        if r.photo: col_i.image(base64.b64decode(r.photo), caption="Nursery Photo")
                         if st.button(f"🗑️ Delete Record {r.id} / መረጃውን አጥፋ", key=f"d_{r.id}"):
                             db.delete(r); db.commit(); st.rerun()
             else:
-                st.info("No records found. / ምንም አይነት መረጃ አልተገኘም።")
+                st.info("No records found. / ምንም መረጃ አልተገኘም።")
             db.close()
 
 if __name__ == "__main__": main()
