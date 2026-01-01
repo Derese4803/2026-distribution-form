@@ -1,7 +1,9 @@
 import streamlit as st
 import pandas as pd
+import base64
 from database import SessionLocal, engine
 from models import BackCheck, Base
+from io import BytesIO
 
 # --- INITIALIZATION ---
 st.set_page_config(page_title="OAF Nursery Back Check", layout="wide", page_icon="🌳")
@@ -10,6 +12,13 @@ def init_db():
     Base.metadata.create_all(bind=engine)
 
 init_db()
+
+# Helper to convert uploaded photo to string
+def process_photo(uploaded_file):
+    if uploaded_file is not None:
+        bytes_data = uploaded_file.getvalue()
+        return base64.b64encode(bytes_data).decode()
+    return None
 
 if "page" not in st.session_state:
     st.session_state["page"] = "Form"
@@ -24,7 +33,7 @@ def main():
     # --- SIDEBAR ---
     st.sidebar.title("OAF Nursery 🌳")
     if st.sidebar.button("📝 Registration Form / መመዝገቢያ ፎርም", use_container_width=True): nav("Form")
-    if st.sidebar.button("📊 View & Delete / መረጃዎችን ይመልከቱ እና ያጥፉ", use_container_width=True): nav("Data")
+    if st.sidebar.button("📊 View & Delete / መረጃዎችን ይመልከቱ", use_container_width=True): nav("Data")
 
     if page == "Form":
         st.title("🚜 Nursery Back Check Form / የችግኝ ጣቢያ ቁጥጥር ፎርም")
@@ -44,13 +53,6 @@ def main():
             ph_val = p3.text_input("Phone / ስልክ ቁጥር")
             fn_val = p4.radio("Is Nursery Fenced? / አጥር አለው?", ["Yes / አዎ", "No / የለም"], horizontal=True)
 
-            # Helper function to calculate remarks
-            def get_remark(val, expected, name):
-                if val == 0: return ""
-                if val == expected: return f"{name}: Correct"
-                elif val > expected: return f"{name}: Over Expectation (+{val-expected})"
-                else: return f"{name}: Under Expectation (-{expected-val})"
-
             def bed_section(species, amharic, expected):
                 st.markdown(f"--- \n### 🌿 {species} ({amharic})")
                 st.info(f"💡 Expected: **{expected}** sockets. / የሚጠበቀው፡ **{expected}** ሶኬቶች።")
@@ -66,18 +68,21 @@ def main():
             gr_n, gr_l, gr_s = bed_section("Grevillea", "ግራቪሊያ", 16)
 
             st.markdown("---")
-            st.subheader("📝 Additional Remarks / ተጨማሪ ማስታወሻ")
-            gen_remark = st.text_area("General Remarks / አጠቃላይ አስተያየት", placeholder="Enter any other observations here...")
+            st.subheader("📸 Upload Photo & Remarks / ፎቶ እና ማስታወሻ")
+            
+            # Photo Upload field
+            uploaded_photo = st.file_uploader("Upload Nursery Photo / የችግኝ ጣቢያውን ፎርም ይጫኑ", type=['jpg', 'png', 'jpeg'])
+            gen_remark = st.text_area("General Remarks / አጠቃላይ አስተያየት")
 
             if st.form_submit_button("Submit Data / መረጃውን መዝግብ"):
-                # Generate Auto-Remarks based on input
-                remarks_list = [
-                    get_remark(g_s, 13, "Guava"),
-                    get_remark(ge_s, 16, "Gesho"),
-                    get_remark(l_s, 13, "Lemon"),
-                    get_remark(gr_s, 16, "Grevillea")
-                ]
-                auto_rem = " | ".join([r for r in remarks_list if r != ""])
+                photo_str = process_photo(uploaded_photo)
+                
+                # Simple Logic for auto-remark
+                def get_rem(val, exp, name):
+                    if val == 0: return ""
+                    return f"{name}: Correct" if val == exp else f"{name}: Error"
+
+                auto_rem = f"{get_rem(g_s, 13, 'Guava')} | {get_rem(ge_s, 16, 'Gesho')}"
 
                 try:
                     new_rec = BackCheck(
@@ -87,47 +92,35 @@ def main():
                         gesho_beds=ge_n, gesho_length=ge_l, gesho_sockets=ge_s, total_gesho_sockets=ge_n*ge_s,
                         lemon_beds=l_n, lemon_length=l_l, lemon_sockets=l_s, total_lemon_sockets=l_n*l_s,
                         grevillea_beds=gr_n, grevillea_length=gr_l, grevillea_sockets=gr_s, total_grevillea_sockets=gr_n*gr_s,
-                        auto_remark=auto_rem,
-                        general_remark=gen_remark
+                        auto_remark=auto_rem, general_remark=gen_remark,
+                        photo=photo_str
                     )
                     db.add(new_rec); db.commit()
-                    st.success("✅ Saved Successfully! / መረጃው ተመዝግቧል!")
+                    st.success("✅ Saved Successfully!")
                 except Exception as e:
-                    st.error(f"Error / ስህተት: {e}")
+                    st.error(f"Error: {e}")
         db.close()
 
     elif page == "Data":
-        st.title("📊 Recorded Data / የተመዘገቡ መረጃዎች")
+        st.title("📊 Recorded Data")
         db = SessionLocal()
         
-        with st.expander("🗑️ Delete a Record / መረጃን አጥፋ"):
-            del_id = st.number_input("Enter ID to Delete", min_value=1, step=1)
-            if st.button("Confirm Delete", type="primary"):
-                target = db.query(BackCheck).filter(BackCheck.id == del_id).first()
-                if target:
-                    db.delete(target); db.commit()
-                    st.success(f"Record {del_id} deleted!")
-                    st.rerun()
-
         recs = db.query(BackCheck).all()
         if recs:
-            df = pd.DataFrame([r.__dict__ for r in recs])
-            # Include remarks in columns
-            cols = [
-                'id', 'kebele', 'checker_fa_name', 
-                'guava_sockets', 'gesho_sockets', 'lemon_sockets', 'grevillea_sockets',
-                'auto_remark', 'general_remark'
-            ]
-            df = df[[c for c in cols if c in df.columns]]
-            
-            rename_map = {
-                'id': 'ID', 'kebele': 'Kebele / ቀበሌ', 'checker_fa_name': 'FA Name',
-                'auto_remark': 'System Remark / ሲስተም ማስታወሻ',
-                'general_remark': 'General Remark / አጠቃላይ አስተያየት'
-            }
-            
-            st.dataframe(df.rename(columns=rename_map), use_container_width=True)
-            st.download_button("📥 Export CSV", df.to_csv(index=False), "nursery_data.csv")
+            for r in recs:
+                with st.container(border=True):
+                    col_text, col_img = st.columns([3, 1])
+                    with col_text:
+                        st.write(f"**ID:** {r.id} | **Kebele:** {r.kebele} | **FA:** {r.checker_fa_name}")
+                        st.write(f"**Remark:** {r.general_remark}")
+                    with col_img:
+                        if r.photo:
+                            st.image(base64.b64decode(r.photo), width=150)
+                        else:
+                            st.write("No Photo")
+                    if st.button(f"Delete ID {r.id}", key=f"del_{r.id}"):
+                        db.delete(r); db.commit()
+                        st.rerun()
         db.close()
 
 if __name__ == "__main__":
