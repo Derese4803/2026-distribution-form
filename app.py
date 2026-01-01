@@ -6,151 +6,104 @@ from io import BytesIO
 from sqlalchemy import inspect, text
 from database import SessionLocal, engine
 from models import BackCheck, Base
+from auth import check_password
 
-# --- INITIALIZATION & DATABASE SYNC ---
+# --- INITIALIZATION ---
 st.set_page_config(page_title="OAF Nursery Back Check", layout="wide", page_icon="🌳")
 
 def init_db():
-    # Creates the new v2 database with all columns
     Base.metadata.create_all(bind=engine)
-    
-    # Extra safety: Ensure columns exist if the file was partially created
+    # Self-healing: Check for missing columns
     inspector = inspect(engine)
-    existing_columns = [col['name'] for col in inspector.get_columns('oaf_back_checks')]
-    
-    required = {'cbe_acc': 'TEXT', 'auto_remark': 'TEXT', 'general_remark': 'TEXT', 'photo': 'TEXT'}
-    
+    cols = [c['name'] for c in inspector.get_columns('oaf_back_checks')]
     with engine.connect() as conn:
-        for col_name, col_type in required.items():
-            if col_name not in existing_columns:
-                try:
-                    conn.execute(text(f"ALTER TABLE oaf_back_checks ADD COLUMN {col_name} {col_type}"))
-                    conn.commit()
-                except:
-                    pass
+        for c_name in ['cbe_acc', 'auto_remark', 'general_remark', 'photo']:
+            if c_name not in cols:
+                conn.execute(text(f"ALTER TABLE oaf_back_checks ADD COLUMN {c_name} TEXT"))
+        conn.commit()
 
 init_db()
 
-# --- HELPER FUNCTIONS ---
-def process_photo(uploaded_file):
-    if uploaded_file is not None:
-        return base64.b64encode(uploaded_file.getvalue()).decode()
-    return None
+def process_photo(file):
+    return base64.b64encode(file.getvalue()).decode() if file else None
 
-if "page" not in st.session_state:
-    st.session_state["page"] = "Form"
+if "page" not in st.session_state: st.session_state["page"] = "Form"
 
 def nav(p):
     st.session_state["page"] = p
     st.rerun()
 
 def main():
-    page = st.session_state["page"]
-    
-    # --- SIDEBAR ---
     st.sidebar.title("OAF Nursery 🌳")
-    if st.sidebar.button("📝 Registration Form / መመዝገቢያ ፎርም", use_container_width=True): nav("Form")
-    if st.sidebar.button("📊 View & Download / መረጃዎችን እና ፎቶዎችን", use_container_width=True): nav("Data")
+    if st.sidebar.button("📝 Form / ፎርም", use_container_width=True): nav("Form")
+    if st.sidebar.button("📊 Data / መረጃ", use_container_width=True): nav("Data")
 
-    # --- PAGE 1: FORM ---
-    if page == "Form":
-        st.title("🚜 Nursery Back Check Form / የችግኝ ጣቢያ ቁጥጥር")
+    if st.session_state["page"] == "Form":
+        st.title("🚜 Nursery Back Check Form")
         db = SessionLocal()
-
-        with st.form("oaf_form", clear_on_submit=True):
-            st.subheader("📍 Location & Personnel / ቦታ እና ሰራተኛ")
+        with st.form("main_form", clear_on_submit=True):
             c1, c2, c3, c4 = st.columns(4)
-            w_val = c1.text_input("Woreda / ወረዳ")
-            cl_val = c2.text_input("Cluster / ክላስተር")
-            k_val = c3.text_input("Kebele / ቀበሌ")
-            t_val = c4.text_input("TNO Name / የTNO ስም")
-
+            w = c1.text_input("Woreda"); cl = c2.text_input("Cluster"); k = c3.text_input("Kebele"); t = c4.text_input("TNO")
             p1, p2, p3, p4 = st.columns(4)
-            f_val = p1.text_input("FA Name / የFA ስም")
-            acc_val = p2.text_input("CBE ACC / የCBE ሂሳብ ቁጥር")
-            ph_val = p3.text_input("Phone / ስልክ ቁጥር")
-            fn_val = p4.radio("Fenced? / አጥር አለው?", ["Yes / አዎ", "No / የለም"], horizontal=True)
+            fa = p1.text_input("FA Name"); acc = p2.text_input("CBE ACC"); ph = p3.text_input("Phone")
+            fn = p4.radio("Fenced?", ["Yes", "No"], horizontal=True)
 
-            def get_remark(val, expected, name):
+            def get_rem(val, exp, name):
                 if val == 0: return ""
-                if val == expected: return f"{name}: Correct"
-                elif val > expected: return f"{name}: Over (+{val-expected})"
-                else: return f"{name}: Under (-{expected-val})"
+                return f"{name}: Correct" if val == exp else f"{name}: {val-exp:+} diff"
 
-            def bed_section(species, amharic, expected):
-                st.markdown(f"--- \n### 🌿 {species} ({amharic})")
-                st.info(f"💡 Expected: **{expected}** sockets wide. / የሚጠበቀው፡ **{expected}** ሶኬቶች።")
-                bc1, bc2, bc3 = st.columns(3)
-                n = bc1.number_input(f"{amharic} beds #", min_value=0, step=1, key=f"n_{species}")
-                l = bc2.number_input(f"{amharic} Length (m)", min_value=0.0, step=0.1, key=f"l_{species}")
-                s = bc3.number_input(f"{amharic} Sockets width", min_value=0, step=1, key=f"s_{species}")
-                return n, l, s
+            def section(name, amharic, exp):
+                st.markdown(f"--- \n### {name} ({amharic}) - Exp: {exp}")
+                sc1, sc2, sc3 = st.columns(3)
+                nb = sc1.number_input(f"{name} beds", 0, key=f"n_{name}")
+                ln = sc2.number_input(f"{name} length", 0.0, key=f"l_{name}")
+                sk = sc3.number_input(f"{name} sockets", 0, key=f"s_{name}")
+                return nb, ln, sk
 
-            g_n, g_l, g_s = bed_section("Guava", "ዘይቶን", 13)
-            ge_n, ge_l, ge_s = bed_section("Gesho", "ጌሾ", 16)
-            l_n, l_l, l_s = bed_section("Lemon", "ሎሚ", 13)
-            gr_n, gr_l, gr_s = bed_section("Grevillea", "ግራቪሊያ", 16)
+            g_n, g_l, g_s = section("Guava", "ዘይቶን", 13)
+            ge_n, ge_l, ge_s = section("Gesho", "ጌሾ", 16)
+            l_n, l_l, l_s = section("Lemon", "ሎሚ", 13)
+            gr_n, gr_l, gr_s = section("Grevillea", "ግራቪሊያ", 16)
 
             st.markdown("---")
-            st.subheader("📸 Photo & Remarks / ፎቶ እና ማስታወሻ")
-            up_photo = st.file_uploader("Upload Photo", type=['jpg', 'jpeg', 'png'])
-            gen_remark = st.text_area("General Remarks / አጠቃላይ አስተያየት")
+            up_img = st.file_uploader("Upload Photo", type=['jpg', 'png', 'jpeg'])
+            rem = st.text_area("General Remarks")
 
-            if st.form_submit_button("Submit Data / መረጃውን መዝግብ"):
-                photo_str = process_photo(up_photo)
-                auto_rem = " | ".join(filter(None, [
-                    get_remark(g_s, 13, "Guava"), get_remark(ge_s, 16, "Gesho"),
-                    get_remark(l_s, 13, "Lemon"), get_remark(gr_s, 16, "Grevillea")
-                ]))
-
-                try:
-                    new_rec = BackCheck(
-                        woreda=w_val, cluster=cl_val, kebele=k_val, tno_name=t_val,
-                        checker_fa_name=f_val, cbe_acc=acc_val, checker_phone=ph_val, fenced=fn_val,
-                        guava_beds=g_n, guava_length=g_l, guava_sockets=g_s, total_guava_sockets=g_n*g_s,
-                        gesho_beds=ge_n, gesho_length=ge_l, gesho_sockets=ge_s, total_gesho_sockets=ge_n*ge_s,
-                        lemon_beds=l_n, lemon_length=l_l, lemon_sockets=l_s, total_lemon_sockets=l_n*l_s,
-                        grevillea_beds=gr_n, grevillea_length=gr_l, grevillea_sockets=gr_s, total_grevillea_sockets=gr_n*gr_s,
-                        auto_remark=auto_rem, general_remark=gen_remark, photo=photo_str
-                    )
-                    db.add(new_rec); db.commit()
-                    st.success("✅ Saved Successfully!")
-                except Exception as e:
-                    st.error(f"Error: {e}")
+            if st.form_submit_button("Submit"):
+                auto = " | ".join(filter(None, [get_rem(g_s, 13, "Guava"), get_rem(ge_s, 16, "Gesho"), 
+                                              get_rem(l_s, 13, "Lemon"), get_rem(gr_s, 16, "Grev")]))
+                new_rec = BackCheck(woreda=w, cluster=cl, kebele=k, tno_name=t, checker_fa_name=fa, 
+                                   cbe_acc=acc, checker_phone=ph, fenced=fn, guava_beds=g_n, guava_length=g_l,
+                                   guava_sockets=g_s, total_guava_sockets=g_n*g_s, gesho_beds=ge_n, 
+                                   gesho_length=ge_l, gesho_sockets=ge_s, total_gesho_sockets=ge_n*ge_s,
+                                   lemon_beds=l_n, lemon_length=l_l, lemon_sockets=l_s, total_lemon_sockets=l_n*l_s,
+                                   grevillea_beds=gr_n, grevillea_length=gr_l, grevillea_sockets=gr_s, 
+                                   total_grevillea_sockets=gr_n*gr_s, auto_remark=auto, general_remark=rem, 
+                                   photo=process_photo(up_img))
+                db.add(new_rec); db.commit(); st.success("Saved!")
         db.close()
 
-    # --- PAGE 2: DATA VIEW ---
-    elif page == "Data":
-        st.title("📊 Records / መረጃዎች")
-        db = SessionLocal()
-        recs = db.query(BackCheck).all()
+    elif st.session_state["page"] == "Data":
+        if check_password():
+            st.title("📊 Records")
+            db = SessionLocal()
+            recs = db.query(BackCheck).all()
+            if recs:
+                # Photo ZIP Download
+                buf = BytesIO()
+                with zipfile.ZipFile(buf, "a", zipfile.ZIP_DEFLATED, False) as zf:
+                    for r in recs:
+                        if r.photo: zf.writestr(f"ID_{r.id}_{r.kebele}.jpg", base64.b64decode(r.photo))
+                st.download_button("📥 Download Photo ZIP", buf.getvalue(), "photos.zip")
 
-        if recs:
-            # ZIP Download
-            zip_buffer = BytesIO()
-            with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
                 for r in recs:
-                    if r.photo:
-                        zip_file.writestr(f"ID_{r.id}_{r.kebele}.jpg", base64.b64decode(r.photo))
-            
-            st.download_button("🖼️ Download All Photos (ZIP)", zip_buffer.getvalue(), "nursery_photos.zip", "application/zip")
+                    with st.container(border=True):
+                        c_t, c_i = st.columns([3, 1])
+                        c_t.write(f"**ID:** {r.id} | **Kebele:** {r.kebele} | **Status:** {r.auto_remark}")
+                        c_t.write(f"**Remarks:** {r.general_remark}")
+                        if r.photo: c_i.image(base64.b64decode(r.photo))
+                        if st.button(f"Delete {r.id}", key=f"d_{r.id}"):
+                            db.delete(r); db.commit(); st.rerun()
+            db.close()
 
-            for r in recs:
-                with st.container(border=True):
-                    t_col, i_col = st.columns([3, 1])
-                    with t_col:
-                        st.write(f"**ID:** {r.id} | **Kebele:** {r.kebele} | **FA:** {r.checker_fa_name}")
-                        st.write(f"**System Remark:** {r.auto_remark}")
-                        st.write(f"**General Remark:** {r.general_remark}")
-                    with i_col:
-                        if r.photo:
-                            st.image(base64.b64decode(r.photo), width=150)
-                    
-                    if st.button(f"🗑️ Delete {r.id}", key=f"del_{r.id}"):
-                        db.delete(r); db.commit(); st.rerun()
-        else:
-            st.info("No records found.")
-        db.close()
-
-if __name__ == "__main__":
-    main()
+if __name__ == "__main__": main()
