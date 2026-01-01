@@ -3,18 +3,41 @@ import pandas as pd
 import base64
 import zipfile
 from io import BytesIO
+from sqlalchemy import inspect, text
 from database import SessionLocal, engine
 from models import BackCheck, Base
 
-# --- INITIALIZATION ---
+# --- INITIALIZATION & AUTO-FIX ---
 st.set_page_config(page_title="OAF Nursery Back Check", layout="wide", page_icon="🌳")
 
 def init_db():
+    # 1. Create table if it doesn't exist
     Base.metadata.create_all(bind=engine)
+    
+    # 2. AUTO-FIX: Check if columns exist and add them if missing
+    inspector = inspect(engine)
+    existing_columns = [col['name'] for col in inspector.get_columns('oaf_back_checks')]
+    
+    required_columns = {
+        'cbe_acc': 'TEXT',
+        'auto_remark': 'TEXT',
+        'general_remark': 'TEXT',
+        'photo': 'TEXT'
+    }
+    
+    with engine.connect() as conn:
+        for col_name, col_type in required_columns.items():
+            if col_name not in existing_columns:
+                try:
+                    conn.execute(text(f"ALTER TABLE oaf_back_checks ADD COLUMN {col_name} {col_type}"))
+                    conn.commit()
+                    st.toast(f"Fixed: Added missing column {col_name}")
+                except Exception as e:
+                    pass # Column might have been added by another thread
 
 init_db()
 
-# Helper: Convert Photo to Base64 String for Database
+# --- HELPERS ---
 def process_photo(uploaded_file):
     if uploaded_file is not None:
         return base64.b64encode(uploaded_file.getvalue()).decode()
@@ -27,15 +50,14 @@ def nav(p):
     st.session_state["page"] = p
     st.rerun()
 
+# --- MAIN APP ---
 def main():
     page = st.session_state["page"]
     
-    # --- SIDEBAR / የጎን አሞሌ ---
     st.sidebar.title("OAF Nursery 🌳")
     if st.sidebar.button("📝 Registration Form / መመዝገቢያ ፎርም", use_container_width=True): nav("Form")
     if st.sidebar.button("📊 View & Download / መረጃዎችን እና ፎቶዎችን", use_container_width=True): nav("Data")
 
-    # --- PAGE 1: FORM ---
     if page == "Form":
         st.title("🚜 Nursery Back Check Form / የችግኝ ጣቢያ ቁጥጥር")
         db = SessionLocal()
@@ -54,7 +76,6 @@ def main():
             ph_val = p3.text_input("Phone / ስልክ ቁጥር")
             fn_val = p4.radio("Fenced? / አጥር አለው?", ["Yes / አዎ", "No / የለም"], horizontal=True)
 
-            # Logic for Auto-Remarks
             def get_remark(val, expected, name):
                 if val == 0: return ""
                 if val == expected: return f"{name}: Correct"
@@ -77,7 +98,7 @@ def main():
 
             st.markdown("---")
             st.subheader("📸 Photo & Remarks / ፎቶ እና ማስታወሻ")
-            up_photo = st.file_uploader("Upload Nursery Photo / ፎቶ ይጫኑ", type=['jpg', 'jpeg', 'png'])
+            up_photo = st.file_uploader("Upload Nursery Photo", type=['jpg', 'jpeg', 'png'])
             gen_remark = st.text_area("General Remarks / አጠቃላይ አስተያየት")
 
             if st.form_submit_button("Submit Data / መረጃውን መዝግብ"):
@@ -100,60 +121,38 @@ def main():
                         auto_remark=auto_rem, general_remark=gen_remark, photo=photo_str
                     )
                     db.add(new_rec); db.commit()
-                    st.success("✅ Saved Successfully! / መረጃው ተመዝግቧል!")
+                    st.success("✅ Saved Successfully!")
                 except Exception as e:
                     st.error(f"Error: {e}")
         db.close()
 
-    # --- PAGE 2: DATA VIEW & DOWNLOADS ---
     elif page == "Data":
-        st.title("📊 Records & Downloads / መረጃዎች እና ማውረጃ")
+        st.title("📊 Records / መረጃዎች")
         db = SessionLocal()
         recs = db.query(BackCheck).all()
 
         if recs:
-            # 1. Download Buttons Row
-            col_csv, col_zip = st.columns(2)
+            # ZIP Download Logic
+            zip_buffer = BytesIO()
+            with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
+                for r in recs:
+                    if r.photo:
+                        zip_file.writestr(f"ID_{r.id}_{r.kebele}.jpg", base64.b64decode(r.photo))
             
-            with col_csv:
-                df = pd.DataFrame([r.__dict__ for r in recs])
-                # Drop the photo column for the CSV export to keep it small
-                csv_df = df.drop(columns=['photo', '_sa_instance_state'], errors='ignore')
-                st.download_button("📥 Download CSV Data", csv_df.to_csv(index=False), "nursery_data.csv", use_container_width=True)
+            st.download_button("🖼️ Download All Photos (ZIP)", zip_buffer.getvalue(), "nursery_photos.zip", "application/zip")
 
-            with col_zip:
-                # Create ZIP of all photos
-                zip_buffer = BytesIO()
-                with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
-                    for r in recs:
-                        if r.photo:
-                            img_bytes = base64.b64decode(r.photo)
-                            zip_file.writestr(f"ID_{r.id}_{r.kebele}.jpg", img_bytes)
-                
-                st.download_button("🖼️ Download All Photos (ZIP)", zip_buffer.getvalue(), "nursery_photos.zip", "application/zip", use_container_width=True)
-
-            st.markdown("---")
-
-            # 2. Display Records with Images
             for r in recs:
                 with st.container(border=True):
                     t_col, i_col = st.columns([3, 1])
                     with t_col:
-                        st.subheader(f"ID: {r.id} | Kebele: {r.kebele}")
-                        st.write(f"**FA:** {r.checker_fa_name} | **CBE:** {r.cbe_acc}")
+                        st.write(f"**ID:** {r.id} | **Kebele:** {r.kebele}")
                         st.write(f"**Status:** {r.auto_remark}")
-                        st.info(f"**Remark:** {r.general_remark}")
+                        st.write(f"**Notes:** {r.general_remark}")
                     with i_col:
-                        if r.photo:
-                            st.image(base64.b64decode(r.photo), caption="Nursery Photo")
-                        else:
-                            st.warning("No Photo")
+                        if r.photo: st.image(base64.b64decode(r.photo), width=150)
                     
-                    if st.button(f"🗑️ Delete ID {r.id}", key=f"del_{r.id}"):
-                        db.delete(r); db.commit()
-                        st.rerun()
-        else:
-            st.info("No records found.")
+                    if st.button(f"🗑️ Delete {r.id}", key=f"del_{r.id}"):
+                        db.delete(r); db.commit(); st.rerun()
         db.close()
 
 if __name__ == "__main__":
